@@ -1,13 +1,31 @@
 import { AvailableDay, TimeSlot, Appointment } from '../types';
 
 export const getNextFriday = (): Date => {
-  // Always return August 1, 2025 (Friday)
-  return new Date(2025, 7, 1); // Month is 0-indexed, so 7 = August
+  const today = new Date();
+  const currentDay = today.getDay();
+  const daysUntilFriday = (5 - currentDay + 7) % 7; // 5 = Friday (0-indexed)
+  
+  // If today is Friday, get next Friday
+  const daysToAdd = daysUntilFriday === 0 ? 7 : daysUntilFriday;
+  
+  const nextFriday = new Date(today);
+  nextFriday.setDate(today.getDate() + daysToAdd);
+  
+  return nextFriday;
 };
 
 export const getNextSaturday = (): Date => {
-  // Always return August 2, 2025 (Saturday)
-  return new Date(2025, 7, 2); // Month is 0-indexed, so 7 = August
+  const today = new Date();
+  const currentDay = today.getDay();
+  const daysUntilSaturday = (6 - currentDay + 7) % 7; // 6 = Saturday (0-indexed)
+  
+  // If today is Saturday, get next Saturday
+  const daysToAdd = daysUntilSaturday === 0 ? 7 : daysUntilSaturday;
+  
+  const nextSaturday = new Date(today);
+  nextSaturday.setDate(today.getDate() + daysToAdd);
+  
+  return nextSaturday;
 };
 
 export const generateTimeSlots = (startTime: string, endTime: string): string[] => {

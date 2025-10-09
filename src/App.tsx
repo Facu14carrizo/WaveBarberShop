@@ -8,13 +8,12 @@ import { BackButton } from './components/BackButton';
 import { Appointment } from './types';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { useNotifications } from './hooks/useNotifications';
+import { sendToZapier, scheduleReminders } from './utils/webhooks';
 
 function App() {
   const [view, setView] = useState<'customer' | 'owner'>('customer');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAnalyticsAuthenticated, setIsAnalyticsAuthenticated] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showAnalyticsPinModal, setShowAnalyticsPinModal] = useState(false);
   const [navigationStack, setNavigationStack] = useState<('customer' | 'owner')[]>(['customer']);
   const [appointments, setAppointments] = useLocalStorage<Appointment[]>('barbershop-appointments', []);
   const { notifications, addNotification, removeNotification } = useNotifications();
@@ -51,14 +50,6 @@ function App() {
     setShowPinModal(false);
   };
 
-  const handleAnalyticsPinSuccess = () => {
-    setIsAnalyticsAuthenticated(true);
-    setShowAnalyticsPinModal(false);
-  };
-
-  const handleAnalyticsPinCancel = () => {
-    setShowAnalyticsPinModal(false);
-  };
 
   const handleGoBack = () => {
     if (navigationStack.length > 1) {
@@ -77,7 +68,6 @@ function App() {
       setView('customer');
       setNavigationStack(['customer']);
       setIsAuthenticated(false);
-      setIsAnalyticsAuthenticated(false);
     }
   };
   const handleNewAppointment = (appointmentData: Omit<Appointment, 'id' | 'createdAt'>) => {
@@ -88,6 +78,12 @@ function App() {
       updatedAt: new Date()
     };
     setAppointments(prev => [...prev, newAppointment]);
+    
+    // Enviar confirmación inmediata a Zapier
+    sendToZapier('CONFIRMATION', newAppointment);
+    
+    // Programar recordatorios automáticos
+    scheduleReminders(newAppointment);
     
     addNotification({
       type: 'success',
@@ -156,8 +152,6 @@ function App() {
           appointments={appointments}
           onDeleteAppointment={handleDeleteAppointment}
           onUpdateAppointment={handleUpdateAppointment}
-          isAnalyticsAuthenticated={isAnalyticsAuthenticated}
-          onAnalyticsAccess={() => setShowAnalyticsPinModal(true)}
         />
       )}
       
@@ -180,16 +174,6 @@ function App() {
         />
       )}
       
-      {/* Analytics PIN Authentication Modal */}
-      {showAnalyticsPinModal && (
-        <PinAuthModal
-          onSuccess={handleAnalyticsPinSuccess}
-          onCancel={handleAnalyticsPinCancel}
-          pin="1409"
-          title="Acceso a Analytics"
-          subtitle="Ingresa el PIN para ver las estadísticas"
-        />
-      )}
     </div>
   );
 }

@@ -7,16 +7,12 @@ interface OwnerDashboardProps {
   appointments: Appointment[];
   onDeleteAppointment: (id: string) => void;
   onUpdateAppointment: (id: string, updates: Partial<Appointment>) => void;
-  isAnalyticsAuthenticated: boolean;
-  onAnalyticsAccess: () => void;
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   appointments,
   onDeleteAppointment,
-  onUpdateAppointment,
-  isAnalyticsAuthenticated,
-  onAnalyticsAccess
+  onUpdateAppointment
 }) => {
   const [activeTab, setActiveTab] = useState<'appointments' | 'analytics'>('appointments');
   const [filterStatus, setFilterStatus] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
@@ -227,8 +223,17 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           
           <div className="flex items-center space-x-3">
             <Phone className="h-5 w-5 text-gray-400" />
-            <div>
-              <p className="text-gray-300">{appointment.customerPhone}</p>
+            <div className="flex items-center space-x-2">
+              <a
+                href={`https://wa.me/${appointment.customerPhone.replace(/[^0-9]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-2 text-green-400 hover:text-green-300 hover:underline transition-colors duration-200 cursor-pointer group"
+                title="Enviar mensaje por WhatsApp"
+              >
+                <span>{appointment.customerPhone}</span>
+                <span className="text-lg group-hover:scale-110 transition-transform duration-200">💬</span>
+              </a>
             </div>
           </div>
           
@@ -344,29 +349,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         </div>
 
         {activeTab === 'analytics' ? (
-          isAnalyticsAuthenticated ? (
-            <Analytics appointments={appointments} />
-          ) : (
-            <div className="text-center py-8 sm:py-12 md:py-16">
-              <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 shadow-lg max-w-md mx-auto">
-                <div className="bg-purple-500/20 border border-purple-500/30 rounded-full w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-                  <BarChart3 className="h-8 w-8 sm:h-10 sm:w-10 text-purple-400" />
-                </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
-                  Acceso Restringido
-                </h3>
-                <p className="text-sm sm:text-base text-gray-400 mb-6">
-                  Se requiere autenticación adicional para acceder a las estadísticas
-                </p>
-                <button
-                  onClick={onAnalyticsAccess}
-                  className="px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg shadow-purple-500/25"
-                >
-                  Ingresar PIN
-                </button>
-              </div>
-            </div>
-          )
+          <Analytics appointments={appointments} />
         ) : (
           <>
         {/* Stats Cards */}

@@ -34,29 +34,39 @@ export const Header: React.FC<HeaderProps> = ({ view, onViewChange }) => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row bg-gray-800/50 backdrop-blur-sm rounded-xl sm:rounded-2xl p-1 border border-gray-700 gap-1 sm:gap-0">
+          <div className="flex items-center space-x-3">
+            {/* Botón principal de Reservar */}
             <button
               onClick={() => onViewChange('customer')}
               className={`flex items-center justify-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 ${
                 view === 'customer'
                   ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
-                  : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
+                  : 'bg-gray-800/50 backdrop-blur-sm text-gray-300 hover:bg-gray-700/50 hover:text-white border border-gray-700'
               }`}
             >
               <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="text-xs sm:text-sm">Reservar</span>
             </button>
-            <button
-              onClick={() => onViewChange('owner')}
-              className={`flex items-center justify-center space-x-2 px-4 py-2 rounded-xl font-medium transition-all duration-300 ${
-                view === 'owner'
-                  ? 'bg-purple-600 text-white shadow-lg shadow-purple-500/25'
-                  : 'text-gray-300 hover:bg-gray-700/50 hover:text-white'
-              }`}
-            >
-              <User className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-xs sm:text-sm">Dashboard</span>
-            </button>
+
+            {/* Botón discreto del Dashboard */}
+            <div className="group relative">
+              <button
+                onClick={() => onViewChange('owner')}
+                className={`w-8 h-8 rounded-full transition-all duration-300 flex items-center justify-center ${
+                  view === 'owner'
+                    ? 'bg-purple-600 text-white shadow-lg'
+                    : 'bg-gray-800/30 hover:bg-gray-700/50 text-gray-500 hover:text-gray-300'
+                }`}
+                title="Panel de Administración"
+              >
+                <User className="h-3 w-3" />
+              </button>
+              
+              {/* Tooltip discreto que aparece en hover */}
+              <div className="absolute right-0 top-full mt-2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                Admin
+              </div>
+            </div>
           </div>
         </div>
       </div>
