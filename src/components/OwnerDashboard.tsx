@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare } from 'lucide-react';
 import { Appointment } from '../types';
+import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
 
 interface OwnerDashboardProps {
@@ -225,7 +226,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <Phone className="h-5 w-5 text-gray-400" />
             <div className="flex items-center space-x-2">
               <a
-                href={`https://wa.me/${appointment.customerPhone.replace(/[^0-9]/g, '')}`}
+                href={buildWhatsAppLink(appointment.customerPhone, 'AR')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center space-x-2 text-green-400 hover:text-green-300 hover:underline transition-colors duration-200 cursor-pointer group"
