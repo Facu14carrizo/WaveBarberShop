@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Header } from './components/Header';
 import { CustomerView } from './components/CustomerView';
 import { OwnerDashboard } from './components/OwnerDashboard';
@@ -6,7 +6,7 @@ import { NotificationToast } from './components/NotificationToast';
 import { PinAuthModal } from './components/PinAuthModal';
 import { BackButton } from './components/BackButton';
 import { Appointment } from './types';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
 import { sendToZapier, scheduleReminders } from './utils/webhooks';
 
@@ -15,7 +15,12 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [navigationStack, setNavigationStack] = useState<('customer' | 'owner')[]>(['customer']);
-  const [appointments, setAppointments] = useLocalStorage<Appointment[]>('barbershop-appointments', []);
+  const { 
+    appointments, 
+    addAppointment,
+    updateAppointment,
+    deleteAppointment
+  } = useSupabaseAppointments();
   const { notifications, addNotification, removeNotification } = useNotifications();
 
   const handleViewChange = (newView: 'customer' | 'owner') => {
@@ -70,62 +75,85 @@ function App() {
       setIsAuthenticated(false);
     }
   };
-  const handleNewAppointment = (appointmentData: Omit<Appointment, 'id' | 'createdAt'>) => {
-    const newAppointment: Appointment = {
-      ...appointmentData,
-      id: Math.random().toString(36).substr(2, 9),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-    setAppointments(prev => [...prev, newAppointment]);
-    
-    // Enviar confirmación inmediata a Zapier
-    sendToZapier('CONFIRMATION', newAppointment);
-    
-    // Programar recordatorios automáticos
-    scheduleReminders(newAppointment);
-    
-    addNotification({
-      type: 'success',
-      title: 'Turno Confirmado',
-      message: `Tu turno para ${newAppointment.service.name} el ${newAppointment.date} a las ${newAppointment.time} ha sido confirmado.`
-    });
-  };
-
-  const handleDeleteAppointment = (id: string) => {
-    const appointment = appointments.find(apt => apt.id === id);
-    setAppointments(prev => prev.filter(apt => apt.id !== id));
-    
-    if (appointment) {
+  const handleNewAppointment = async (appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
+    try {
+      const appointmentWithId = {
+        ...appointmentData,
+        id: Math.random().toString(36).substr(2, 9)
+      };
+      const newAppointment = await addAppointment(appointmentWithId);
+      
+      // Enviar confirmación inmediata a Zapier
+      sendToZapier('CONFIRMATION', newAppointment);
+      
+      // Programar recordatorios automáticos
+      scheduleReminders(newAppointment);
+      
       addNotification({
-        type: 'info',
-        title: 'Turno Eliminado',
-        message: `El turno de ${appointment.customerName} ha sido eliminado.`
+        type: 'success',
+        title: 'Turno Confirmado',
+        message: `Tu turno para ${newAppointment.service.name} el ${newAppointment.date} a las ${newAppointment.time} ha sido confirmado.`
+      });
+    } catch (error) {
+      console.error('Error creating appointment:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo crear el turno. Intenta nuevamente.'
       });
     }
   };
 
-  const handleUpdateAppointment = (id: string, updates: Partial<Appointment>) => {
-    const oldAppointment = appointments.find(apt => apt.id === id);
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === id ? { ...apt, ...updates } : apt
-      )
-    );
+  const handleDeleteAppointment = async (id: string) => {
+    const appointment = appointments.find(apt => apt.id === id);
     
-    if (oldAppointment && updates.status && updates.status !== oldAppointment.status) {
-      const statusMessages = {
-        confirmed: 'confirmado',
-        completed: 'marcado como completado',
-        cancelled: 'cancelado',
-        'no-show': 'marcado como no show'
-      };
+    try {
+      await deleteAppointment(id);
       
+      if (appointment) {
+        addNotification({
+          type: 'info',
+          title: 'Turno Eliminado',
+          message: `El turno de ${appointment.customerName} ha sido eliminado.`
+        });
+      }
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
       addNotification({
-        type: updates.status === 'completed' ? 'success' : 
-              updates.status === 'cancelled' ? 'warning' : 'info',
-        title: 'Estado Actualizado',
-        message: `El turno de ${oldAppointment.customerName} ha sido ${statusMessages[updates.status]}.`
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo eliminar el turno. Intenta nuevamente.'
+      });
+    }
+  };
+
+  const handleUpdateAppointment = async (id: string, updates: Partial<Appointment>) => {
+    const oldAppointment = appointments.find(apt => apt.id === id);
+    
+    try {
+      await updateAppointment(id, updates);
+      
+      if (oldAppointment && updates.status && updates.status !== oldAppointment.status) {
+        const statusMessages = {
+          confirmed: 'confirmado',
+          completed: 'marcado como completado',
+          cancelled: 'cancelado',
+          'no-show': 'marcado como no show'
+        };
+        
+        addNotification({
+          type: updates.status === 'completed' ? 'success' : 
+                updates.status === 'cancelled' ? 'warning' : 'info',
+          title: 'Estado Actualizado',
+          message: `El turno de ${oldAppointment.customerName} ha sido ${statusMessages[updates.status]}.`
+        });
+      }
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo actualizar el turno. Intenta nuevamente.'
       });
     }
   };
