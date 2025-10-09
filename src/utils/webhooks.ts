@@ -23,23 +23,36 @@ export interface AppointmentWebhookData {
 // URLs de webhooks de Zapier (las configurarás en Zapier)
 const ZAPIER_WEBHOOKS = {
   // Webhook para confirmación inmediata
-  CONFIRMATION: 'TU_WEBHOOK_AQUI_CONFIRMACION',
+  CONFIRMATION: 'https://hooks.zapier.com/hooks/catch/15043194/u53i8bt/',
   // Webhook para recordatorio 24h antes
   REMINDER_24H: 'TU_WEBHOOK_AQUI_RECORDATORIO_24H',
   // Webhook para recordatorio el día del turno
   REMINDER_DAY: 'TU_WEBHOOK_AQUI_RECORDATORIO_DIA'
 };
 
+// Función para enviar datos en el formato específico que necesita Zapier
 export const sendToZapier = async (
   webhookType: 'CONFIRMATION' | 'REMINDER_24H' | 'REMINDER_DAY',
   appointmentData: AppointmentWebhookData
 ): Promise<boolean> => {
   const webhookUrl = ZAPIER_WEBHOOKS[webhookType];
   
-  if (!webhookUrl || webhookUrl === 'TU_WEBHOOK_AQUI_CONFIRMACION') {
+  if (!webhookUrl || webhookUrl.includes('TU_WEBHOOK_AQUI')) {
     console.log('Webhook no configurado:', webhookType);
     return false;
   }
+
+  // Formatear los datos exactamente como los necesita Zapier
+  const webhookData = {
+    customerPhone: appointmentData.customerPhone,
+    customerName: appointmentData.customerName,
+    date: appointmentData.date,
+    time: appointmentData.time,
+    service: {
+      name: appointmentData.service.name,
+      price: appointmentData.service.price
+    }
+  };
 
   try {
     const response = await fetch(webhookUrl, {
@@ -47,11 +60,11 @@ export const sendToZapier = async (
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(appointmentData),
+      body: JSON.stringify(webhookData),
     });
 
     if (response.ok) {
-      console.log('Datos enviados a Zapier exitosamente:', webhookType);
+      console.log('Datos enviados a Zapier exitosamente:', webhookType, webhookData);
       return true;
     } else {
       console.error('Error al enviar a Zapier:', response.status);

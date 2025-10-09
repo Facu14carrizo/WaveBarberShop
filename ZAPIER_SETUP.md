@@ -87,36 +87,35 @@
 
 ```typescript
 const ZAPIER_WEBHOOKS = {
-  // Reemplaza estas URLs con las de tus webhooks de Zapier
-  CONFIRMATION: 'https://hooks.zapier.com/hooks/catch/TU_WEBHOOK_CONFIRMACION',
-  REMINDER_24H: 'https://hooks.zapier.com/hooks/catch/TU_WEBHOOK_24H',
-  REMINDER_DAY: 'https://hooks.zapier.com/hooks/catch/TU_WEBHOOK_DIA'
+  // ✅ YA CONFIGURADO - Webhook de confirmación
+  CONFIRMATION: 'https://hooks.zapier.com/hooks/catch/15043194/u53i8bt/',
+  // ⏳ PENDIENTE - Webhook para recordatorio 24h antes
+  REMINDER_24H: 'TU_WEBHOOK_AQUI_RECORDATORIO_24H',
+  // ⏳ PENDIENTE - Webhook para recordatorio el día
+  REMINDER_DAY: 'TU_WEBHOOK_AQUI_RECORDATORIO_DIA'
 };
 ```
 
 ## 📋 Datos que Envía la App
 
-Cada webhook recibe estos datos:
+Cada webhook recibe estos datos (formato exacto para Zapier):
 ```json
 {
-  "id": "abc123",
-  "customerName": "Juan Pérez",
   "customerPhone": "+5491112345678",
-  "customerEmail": "juan@email.com",
-  "service": {
-    "name": "Corte Premium",
-    "price": 2500,
-    "duration": 45,
-    "icon": "✂️"
-  },
+  "customerName": "Juan Pérez",
   "date": "viernes 15 de enero",
   "time": "18:30",
-  "status": "confirmed",
-  "createdAt": "2024-01-10T10:30:00Z",
-  "updatedAt": "2024-01-10T10:30:00Z",
-  "notes": "Cliente preferencia: pelo corto"
+  "service": {
+    "name": "Corte Premium",
+    "price": 2500
+  }
 }
 ```
+
+### ✅ **CONFIRMACIÓN YA FUNCIONANDO**
+- URL configurada: `https://hooks.zapier.com/hooks/catch/15043194/u53i8bt/`
+- Datos enviados en formato correcto
+- ¡Listo para probar!
 
 ## 🎯 Resultado Final
 
