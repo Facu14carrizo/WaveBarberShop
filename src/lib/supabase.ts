@@ -24,3 +24,13 @@ export interface AppointmentRow {
   created_at: string
   updated_at: string
 }
+
+export interface CustomTimeRangeRow {
+  id: string
+  day: 'friday' | 'saturday'
+  start: string // HH:mm
+  end: string   // HH:mm
+  created_at?: string
+}
+
+

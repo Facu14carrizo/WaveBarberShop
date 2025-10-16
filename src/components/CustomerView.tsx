@@ -4,7 +4,8 @@ import { TimeSlotGrid } from './TimeSlotGrid';
 import { ServiceSelector } from './ServiceSelector';
 import { BookingForm } from './BookingForm';
 import { BackButton } from './BackButton';
-import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
+import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges } from '../utils/timeSlots';
+import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { Appointment, Service } from '../types';
 import { services } from '../data/services';
 
@@ -21,8 +22,9 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
+  const { ranges } = useSupabaseCustomTimeRanges();
 
-  const availableDays = getAvailableDays();
+  const availableDays = getAvailableDays(ranges as CustomTimeRanges);
   const currentDay = availableDays.find(day => day.day === selectedDay)!;
   
   const selectedDate = selectedDay === 'friday' 
@@ -69,13 +71,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           className="top-24"
         />
       )}
-      {selectedService && !selectedTime && (
-        <BackButton 
-          onClick={handleBackToServices}
-          label="Cambiar servicio"
-          className="top-24"
-        />
-      )}
+      {/* Botón 'Cambiar servicio' removido a pedido */}
       
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         

@@ -1,5 +1,15 @@
 import { AvailableDay, TimeSlot, Appointment } from '../types';
 
+export type CustomTimeRanges = {
+  friday: { start: string; end: string }[];
+  saturday: { start: string; end: string }[];
+};
+
+const parseTimeToMinutes = (time: string): number => {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
 export const getNextFriday = (): Date => {
   const today = new Date();
   const currentDay = today.getDay();
@@ -34,41 +44,52 @@ export const generateTimeSlots = (startTime: string, endTime: string): string[] 
   const end = new Date(`2000-01-01 ${endTime}`);
   
   let current = new Date(start);
-  while (current < end) {
+  while (current <= end) {
     slots.push(current.toTimeString().slice(0, 5));
-    current.setMinutes(current.getMinutes() + 30);
+    current.setMinutes(current.getMinutes() + 60);
   }
   
   return slots;
 };
 
-export const getAvailableDays = (): AvailableDay[] => [
-  {
-    day: 'friday',
-    label: 'Viernes',
-    startTime: '18:00',
-    endTime: '21:00',
-    slots: generateTimeSlots('18:00', '21:00').map(time => ({
-      time,
-      available: true
-    }))
-  },
-  {
-    day: 'saturday',
-    label: 'Sábado',
-    startTime: '10:00',
-    endTime: '21:00',
-    slots: [
-      ...generateTimeSlots('10:00', '13:00').map(time => ({
-        time,
-        available: true
-      })),
-      ...generateTimeSlots('14:00', '21:00').map(time => ({
-        time,
-        available: true
-      }))
-    ]
-  }
+export const getAvailableDays = (custom?: CustomTimeRanges): AvailableDay[] => [
+  // We'll merge defaults with any custom ranges from localStorage
+  (() => {
+    const defaultSlots = generateTimeSlots('18:00', '21:00');
+    const customRanges = custom || { friday: [], saturday: [] };
+    const customSlots = customRanges.friday
+      .flatMap(r => generateTimeSlots(r.start, r.end));
+    const combined = Array.from(new Set([...defaultSlots, ...customSlots])).sort(
+      (a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b)
+    );
+    const startTime = combined.length > 0 ? combined[0] : '18:00';
+    const endTime = combined.length > 0 ? combined[combined.length - 1] : '21:00';
+    return {
+      day: 'friday',
+      label: 'Viernes',
+      startTime,
+      endTime,
+      slots: combined.map(time => ({ time, available: true }))
+    } as AvailableDay;
+  })(),
+  (() => {
+    const defaultSlots = generateTimeSlots('14:00', '21:00');
+    const customRanges = custom || { friday: [], saturday: [] };
+    const customSlots = customRanges.saturday
+      .flatMap(r => generateTimeSlots(r.start, r.end));
+    const combined = Array.from(new Set([...defaultSlots, ...customSlots])).sort(
+      (a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b)
+    );
+    const startTime = combined.length > 0 ? combined[0] : '14:00';
+    const endTime = combined.length > 0 ? combined[combined.length - 1] : '21:00';
+    return {
+      day: 'saturday',
+      label: 'Sábado',
+      startTime,
+      endTime,
+      slots: combined.map(time => ({ time, available: true }))
+    } as AvailableDay;
+  })()
 ];
 
 export const formatDate = (date: Date): string => {

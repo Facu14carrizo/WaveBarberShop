@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare } from 'lucide-react';
-import { Appointment } from '../types';
+import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
+import { useNotifications } from '../hooks/useNotifications';
+import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
+import { services } from '../data/services';
+import { Appointment, Service } from '../types';
 import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
 
@@ -8,14 +12,16 @@ interface OwnerDashboardProps {
   appointments: Appointment[];
   onDeleteAppointment: (id: string) => void;
   onUpdateAppointment: (id: string, updates: Partial<Appointment>) => void;
+  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   appointments,
   onDeleteAppointment,
-  onUpdateAppointment
+  onUpdateAppointment,
+  onNewAppointment
 }) => {
-  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings'>('appointments');
   const [filterStatus, setFilterStatus] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,20 +105,25 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const AppointmentCard: React.FC<{ appointment: Appointment; isToday: boolean }> = ({ 
     appointment, 
     isToday 
-  }) => (
-    <div className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${
-      isToday ? 'border-l-green-500' : 'border-l-purple-500'
-    } hover:shadow-xl transition-all duration-300`}>
+  }) => {
+    const isSobreturno = appointment.time.endsWith(':30');
+    const borderClass = isSobreturno
+      ? 'border-l-orange-500'
+      : isToday
+        ? 'border-l-green-500'
+        : 'border-l-purple-500';
+    return (
+    <div className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center space-x-3">
           <div className={`rounded-full p-2 ${
-            isToday ? 'bg-green-500/20 border border-green-500/30' : 'bg-purple-500/20 border border-purple-500/30'
+            isSobreturno ? 'bg-orange-500/20 border border-orange-500/30' : (isToday ? 'bg-green-500/20 border border-green-500/30' : 'bg-purple-500/20 border border-purple-500/30')
           }`}>
             <span className="text-lg">{appointment.service.icon}</span>
           </div>
           <div>
             <p className={`font-semibold ${
-              isToday ? 'text-green-300' : 'text-purple-300'
+              isSobreturno ? 'text-orange-300' : (isToday ? 'text-green-300' : 'text-purple-300')
             }`}>
               {appointment.date}
             </p>
@@ -123,16 +134,20 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </div>
           </div>
         </div>
-        
-        <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-          appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-          appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-          appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-          'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-        }`}>
-          {appointment.status === 'confirmed' ? 'Confirmado' :
-           appointment.status === 'completed' ? 'Completado' :
-           appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
+        <div className={isSobreturno ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
+          <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+            appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+            appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+            appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+            'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+          }`}>
+            {appointment.status === 'confirmed' ? 'Confirmado' :
+             appointment.status === 'completed' ? 'Completado' :
+             appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
+          </div>
+          {isSobreturno && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">SOBRETURNO</span>
+          )}
         </div>
       </div>
 
@@ -306,6 +321,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       )}
     </div>
   );
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 pb-safe">
@@ -346,12 +362,23 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="text-sm sm:text-base">Analytics</span>
             </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+                activeTab === 'settings'
+                  ? 'bg-purple-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="text-sm sm:text-base">Settings</span>
+            </button>
           </div>
         </div>
 
         {activeTab === 'analytics' ? (
           <Analytics appointments={appointments} />
-        ) : (
+        ) : activeTab === 'appointments' ? (
           <>
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 md:mb-12">
@@ -480,8 +507,328 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           </div>
         )}
         </>
+        ) : (
+          <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} />
         )}
       </div>
     </div>
   );
 };
+
+const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void }> = ({ appointments, onNewAppointment }) => {
+  const [fridayStart, setFridayStart] = useState('');
+  const [fridayEnd, setFridayEnd] = useState('');
+  const [saturdayStart, setSaturdayStart] = useState('');
+  const [saturdayEnd, setSaturdayEnd] = useState('');
+  const { ranges, addRange, deleteRange, loading } = useSupabaseCustomTimeRanges();
+  const { addNotification } = useNotifications();
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const buildAllHourTimes = () => {
+    const times: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      const hh = String(h).padStart(2, '0');
+      times.push(`${hh}:00`);
+    }
+    return times;
+  };
+
+  const getExistingSet = (day: 'friday' | 'saturday') => {
+    const available = getAvailableDays(ranges as CustomTimeRanges);
+    const current = available.find(d => d.day === day);
+    return new Set((current?.slots || []).map(s => s.time));
+  };
+
+  const getStartOptions = (day: 'friday' | 'saturday') => {
+    const existing = getExistingSet(day);
+    const withinWindow = (t: string) => {
+      const mins = toMinutes(t);
+      const eight = 8 * 60;
+      const friMax = 17 * 60; // 17:00 inclusive
+      const satMax = 13 * 60; // 13:00 inclusive
+      const inMorningWindow = day === 'friday'
+        ? mins >= eight && mins <= friMax
+        : mins >= eight && mins <= satMax;
+      const inLateWindow = mins >= 22 * 60 || mins === 0; // 22:00, 23:00 y 00:00
+      return inMorningWindow || inLateWindow;
+    };
+    return buildAllHourTimes().filter(t => withinWindow(t) && !existing.has(t));
+  };
+
+  const getEndOptions = (day: 'friday' | 'saturday', start?: string) => {
+    if (!start) return [] as string[];
+    const existing = getExistingSet(day);
+    return buildAllHourTimes()
+      .filter(t => toMinutes(t) >= toMinutes(start) && !existing.has(t))
+      .filter(t => {
+        const generated = generateTimeSlots(start, t);
+        return generated.every(slot => !existing.has(slot));
+      });
+  };
+
+  const onSaveRange = async (day: 'friday' | 'saturday', start: string, end: string) => {
+    try {
+      await addRange(day, start, end);
+      addNotification({ type: 'success', title: 'Guardado', message: 'Rango agregado correctamente' });
+      if (day === 'friday') { setFridayStart(''); setFridayEnd(''); }
+      if (day === 'saturday') { setSaturdayStart(''); setSaturdayEnd(''); }
+    } catch (e) {
+      addNotification({ type: 'error', title: 'Error', message: e instanceof Error ? e.message : 'No se pudo guardar' });
+    }
+  };
+
+  return (
+    <div className="mb-6 sm:mb-8 md:mb-12">
+      <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center">Configuraciones</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+          <h4 className="text-lg font-semibold text-white mb-4">Añadir horarios adicionales para viernes</h4>
+          <div className="flex items-center gap-3 mb-3">
+            <select
+              value={fridayStart}
+              onChange={(e) => { setFridayStart(e.target.value); setFridayEnd(''); }}
+              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
+              <option value="">Inicio</option>
+              {getStartOptions('friday').map(t => (
+                <option key={`fs-${t}`} value={t}>{t}</option>
+              ))}
+            </select>
+            <span className="text-gray-300">a</span>
+            <select
+              value={fridayEnd}
+              onChange={(e) => setFridayEnd(e.target.value)}
+              disabled={!fridayStart}
+              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+            >
+              <option value="">Fin</option>
+              {getEndOptions('friday', fridayStart).map(t => (
+                <option key={`fe-${t}`} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => onSaveRange('friday', fridayStart, fridayEnd)}
+            disabled={!fridayStart || !fridayEnd}
+            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+          >
+            Guardar rango para Viernes
+          </button>
+        </div>
+
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+          <h4 className="text-lg font-semibold text-white mb-4">Añadir horarios adicionales para sabado</h4>
+          <div className="flex items-center gap-3 mb-3">
+            <select
+              value={saturdayStart}
+              onChange={(e) => { setSaturdayStart(e.target.value); setSaturdayEnd(''); }}
+              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
+              <option value="">Inicio</option>
+              {getStartOptions('saturday').map(t => (
+                <option key={`ss-${t}`} value={t}>{t}</option>
+              ))}
+            </select>
+            <span className="text-gray-300">a</span>
+            <select
+              value={saturdayEnd}
+              onChange={(e) => setSaturdayEnd(e.target.value)}
+              disabled={!saturdayStart}
+              className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50"
+            >
+              <option value="">Fin</option>
+              {getEndOptions('saturday', saturdayStart).map(t => (
+                <option key={`se-${t}`} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => onSaveRange('saturday', saturdayStart, saturdayEnd)}
+            disabled={!saturdayStart || !saturdayEnd}
+            className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+          >
+            Guardar rango para Sábado
+          </button>
+        </div>
+      </div>
+      <p className="text-gray-400 text-sm mt-4 text-center">Los rangos se guardan en el servidor y se sincronizan en tiempo real. Ya están disponibles para todos los clientes.</p>
+
+      <div className="mt-6 bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+        <h4 className="text-lg font-semibold text-white mb-4">Rangos actuales</h4>
+        {loading ? (
+          <p className="text-gray-400">Cargando...</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <h5 className="text-white font-medium mb-2">Viernes</h5>
+              <div className="space-y-2">
+                {ranges.friday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
+                {ranges.friday.map((r) => (
+                  <div key={`f-${r.start}-${r.end}`} className="flex items-center justify-between bg-gray-700/60 border border-gray-600 rounded-lg px-3 py-2">
+                    <span className="text-gray-200 text-sm">{r.start} a {r.end}</span>
+                    <button
+                      onClick={() => deleteRange('friday', r.start, r.end)}
+                      className="text-red-400 hover:text-red-300 text-sm"
+                    >Eliminar</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h5 className="text-white font-medium mb-2">Sábado</h5>
+              <div className="space-y-2">
+                {ranges.saturday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
+                {ranges.saturday.map((r) => (
+                  <div key={`s-${r.start}-${r.end}`} className="flex items-center justify-between bg-gray-700/60 border border-gray-600 rounded-lg px-3 py-2">
+                    <span className="text-gray-200 text-sm">{r.start} a {r.end}</span>
+                    <button
+                      onClick={() => deleteRange('saturday', r.start, r.end)}
+                      className="text-red-400 hover:text-red-300 text-sm"
+                    >Eliminar</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sobreturnos */}
+      <div className="mt-6 bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+        <h4 className="text-lg font-semibold text-white mb-4">Crear Sobreturno (:30)</h4>
+        <SobreturnoForm
+          appointments={appointments}
+          onNewAppointment={onNewAppointment}
+          ranges={ranges as CustomTimeRanges}
+        />
+        <p className="text-xs text-gray-400 mt-2">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
+      </div>
+    </div>
+  );
+};
+
+interface SobreturnoFormProps {
+  appointments: Appointment[];
+  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  ranges: CustomTimeRanges;
+}
+function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFormProps) {
+  const [day, setDay] = useState<'friday' | 'saturday'>('friday');
+  const [serviceId, setServiceId] = useState(services[0]?.id || '');
+  const [time, setTime] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const selectedService: Service | undefined = services.find(s => s.id === serviceId);
+
+  const buildHalfHours = () => {
+    const times: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      const hh = String(h).padStart(2, '0');
+      times.push(`${hh}:30`);
+    }
+    return times;
+  };
+
+  const toMinutes = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const availableDays = getAvailableDays(ranges);
+  const selectedDate = day === 'friday' ? formatDate(getNextFriday()) : formatDate(getNextSaturday());
+  const existingSet = new Set(
+    availableDays.find(d => d.day === day)?.slots.map(s => s.time) || []
+  );
+  const options = buildHalfHours()
+    .filter(t => {
+      const mins = toMinutes(t);
+      return mins >= (8 * 60 + 30) && mins <= (23 * 60 + 30);
+    })
+    .filter(t => !existingSet.has(t));
+  const slotAvailable = time ? isSlotAvailable(selectedDate, time, appointments) : false;
+
+  const handleCreate = async () => {
+    if (!selectedService || !time || !customerName || !customerPhone) return;
+    if (!slotAvailable) return;
+    await onNewAppointment({
+      date: selectedDate,
+      time,
+      customerName,
+      customerPhone,
+      status: 'confirmed',
+      service: selectedService
+    });
+    setTime('');
+    setCustomerName('');
+    setCustomerPhone('');
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <select
+          value={day}
+          onChange={(e) => setDay(e.target.value as any)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        >
+          <option value="friday">Viernes</option>
+          <option value="saturday">Sábado</option>
+        </select>
+
+        <select
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        >
+          <option value="">Hora (:30)</option>
+          {options.map(t => (
+            <option key={`half-${t}`} value={t}>{t}</option>
+          ))}
+        </select>
+
+        <select
+          value={serviceId}
+          onChange={(e) => setServiceId(e.target.value)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        >
+          {services.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+
+        <button
+          onClick={handleCreate}
+          disabled={!time || !selectedService || !customerName || !customerPhone || !slotAvailable}
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
+          Crear Sobreturno
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input
+          type="text"
+          placeholder="Nombre del cliente"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        />
+        <input
+          type="tel"
+          placeholder="Teléfono del cliente"
+          value={customerPhone}
+          onChange={(e) => setCustomerPhone(e.target.value)}
+          className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+        />
+      </div>
+
+      {!slotAvailable && time && (
+        <p className="text-xs text-yellow-400">Ese horario ya está ocupado.</p>
+      )}
+    </div>
+  );
+}

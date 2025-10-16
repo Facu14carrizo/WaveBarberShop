@@ -63,6 +63,24 @@ CREATE TRIGGER update_appointments_updated_at
     EXECUTE FUNCTION update_updated_at_column();
 ```
 
+### 2b. Tabla de rangos de horarios personalizados
+
+```sql
+-- Crear tabla para rangos personalizados (visible para todos)
+CREATE TABLE custom_time_ranges (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  day TEXT NOT NULL CHECK (day IN ('friday','saturday')),
+  start TEXT NOT NULL, -- formato HH:MM
+  end TEXT NOT NULL,   -- formato HH:MM
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE custom_time_ranges ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all operations on custom_time_ranges" ON custom_time_ranges
+FOR ALL USING (true) WITH CHECK (true);
+```
+
 ### **3. Obtener credenciales**
 
 En el dashboard de Supabase:

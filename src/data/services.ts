@@ -6,7 +6,7 @@ export const services: Service[] = [
     name: 'Corte Clásico',
     duration: 30,
     price: 10000,
-    description: 'Corte tradicional con tijera y máquina, incluye lavado',
+    description: 'Corte tradicional con tijera y máquina. Perfilado de cejas y barba',
     icon: '✂️'
   },
   {
@@ -14,23 +14,15 @@ export const services: Service[] = [
     name: 'Arreglo de Barba',
     duration: 20,
     price: 5000,
-    description: 'Perfilado y arreglo de barba con navaja',
+    description: 'Perfilado, reducción de volumen y arreglo de la barba con navaja, máquina y tijera.',
     icon: '🧔'
   },
   {
-    id: 'complete-service',
-    name: 'Servicio Completo',
-    duration: 45,
-    price: 14000,
-    description: 'Corte + barba + lavado + peinado',
-    icon: '💫'
-  },
-  {
-    id: 'kids-cut',
-    name: 'Corte Infantil',
-    duration: 25,
-    price: 7000,
-    description: 'Corte especial para niños hasta 12 años',
-    icon: '👶'
+    id: 'designs',
+    name: 'Diseños',
+    duration: 40,
+    price: 12000,
+    description: 'Diseños y líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
+    icon: '🎨'
   }
 ];

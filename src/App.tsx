@@ -180,6 +180,7 @@ function App() {
           appointments={appointments}
           onDeleteAppointment={handleDeleteAppointment}
           onUpdateAppointment={handleUpdateAppointment}
+          onNewAppointment={handleNewAppointment}
         />
       )}
       

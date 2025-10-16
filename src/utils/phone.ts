@@ -40,3 +40,5 @@ export function buildWhatsAppLink(rawPhone: string, defaultCountry: 'AR' | 'INT'
   if (!normalized) return 'https://wa.me/';
   return `https://wa.me/${normalized}`;
 }
+
+

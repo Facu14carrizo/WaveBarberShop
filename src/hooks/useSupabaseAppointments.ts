@@ -176,3 +176,5 @@ export const useSupabaseAppointments = () => {
     refresh: loadAppointments
   }
 }
+
+
