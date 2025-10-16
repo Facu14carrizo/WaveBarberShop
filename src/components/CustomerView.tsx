@@ -169,9 +169,6 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               >
                 <div className="text-center">
                   <div className="font-bold text-base sm:text-lg">{day.label}</div>
-                  <div className="text-xs sm:text-sm opacity-80">
-                    {day.startTime} - {day.endTime}
-                  </div>
                 </div>
               </button>
             ))}
