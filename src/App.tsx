@@ -5,6 +5,7 @@ import { OwnerDashboard } from './components/OwnerDashboard';
 import { NotificationToast } from './components/NotificationToast';
 import { PinAuthModal } from './components/PinAuthModal';
 import { BackButton } from './components/BackButton';
+import { BackgroundMusic } from './components/BackgroundMusic';
 import { Appointment } from './types';
 import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
@@ -202,6 +203,9 @@ function App() {
           onCancel={handlePinCancel}
         />
       )}
+      
+      {/* Background Music */}
+      <BackgroundMusic />
       
     </div>
   );

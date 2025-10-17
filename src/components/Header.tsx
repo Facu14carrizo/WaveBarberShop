@@ -24,7 +24,7 @@ export const Header: React.FC<HeaderProps> = ({ view, onViewChange }) => {
             <div className="bg-purple-500/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-purple-500/30 animate-glow">
               <Scissors className="h-6 w-6 sm:h-8 sm:w-8 text-purple-300" />
             </div>
-            <div>
+            <div className="text-center">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight drop-shadow-lg animate-shimmer">
                 💈𝙒𝘼𝙑𝙀💈
               </h1>

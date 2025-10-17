@@ -71,7 +71,13 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           className="top-24"
         />
       )}
-      {/* Botón 'Cambiar servicio' removido a pedido */}
+      {selectedService && !selectedTime && (
+        <BackButton 
+          onClick={handleBackToServices}
+          label="Volver"
+          className="top-24"
+        />
+      )}
       
       <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
         
