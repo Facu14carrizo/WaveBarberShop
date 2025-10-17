@@ -19,10 +19,10 @@ export const services: Service[] = [
   },
   {
     id: 'designs',
-    name: 'Diseños',
+    name: 'Corte + Diseño',
     duration: 40,
     price: 12000,
-    description: 'Corte y diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
+    description: 'Diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
     icon: '🎨'
   }
 ];
