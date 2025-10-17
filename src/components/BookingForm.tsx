@@ -189,7 +189,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               disabled={isSubmitting}
               className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg sm:rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-500/25 text-sm sm:text-base"
             >
-              {isSubmitting ? 'Confirmando...' : `Confirmar - $${selectedService.price.toLocaleString()}`}
+              {isSubmitting ? 'Confirmando...' : `Confirmar  $${selectedService.price.toLocaleString()}`}
             </button>
           </div>
         </form>

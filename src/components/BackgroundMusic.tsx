@@ -6,39 +6,71 @@ export const BackgroundMusic: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    // Solo configurar si no está ya configurado
-    if (audio.volume === 1) {
-      audio.volume = 0.3; // Volumen moderado (30%)
-    }
-    if (!audio.loop) {
-      audio.loop = true; // Repetir automáticamente
-    }
+    // Configurar audio
+    audio.volume = 0.3; // Volumen moderado (30%)
+    audio.loop = true; // Repetir automáticamente
 
-    // Solo intentar reproducir si no está ya reproduciéndose
-    if (audio.paused) {
-      const playAudio = async () => {
-        try {
-          await audio.play();
-          setIsPlaying(true);
-        } catch (error) {
-          // Si falla el autoplay (políticas del navegador), no hacer nada
-          console.log('Autoplay bloqueado por el navegador');
-        }
-      };
+    // Función para intentar reproducir
+    const attemptPlay = async () => {
+      try {
+        await audio.play();
+        setIsPlaying(true);
+        setAutoplayBlocked(false);
+        return true;
+      } catch (error) {
+        console.log('Autoplay bloqueado:', error);
+        setAutoplayBlocked(true);
+        return false;
+      }
+    };
 
-      // Pequeño delay para asegurar que la página esté completamente cargada
-      const timer = setTimeout(playAudio, 1000);
+    // Múltiples intentos de autoplay
+    const tryAutoplay = async () => {
+      // Intento inmediato
+      if (await attemptPlay()) return;
 
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-  }, []);
+      // Intento después de 1 segundo
+      setTimeout(async () => {
+        if (await attemptPlay()) return;
+
+        // Intento después de 3 segundos
+        setTimeout(async () => {
+          if (await attemptPlay()) return;
+
+          // Intento después de 5 segundos
+          setTimeout(attemptPlay, 2000);
+        }, 2000);
+      }, 1000);
+    };
+
+    // Iniciar intentos
+    tryAutoplay();
+
+    // Eventos para desbloquear audio con interacción del usuario
+    const unlockAudio = async () => {
+      if (audio.paused && autoplayBlocked) {
+        await attemptPlay();
+      }
+    };
+
+    // Agregar listeners para eventos de usuario
+    const events = ['click', 'touchstart', 'keydown', 'scroll'];
+    events.forEach(event => {
+      document.addEventListener(event, unlockAudio, { once: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, unlockAudio);
+      });
+    };
+  }, [autoplayBlocked]);
 
   // Efecto adicional para manejar el estado de reproducción
   useEffect(() => {
@@ -63,6 +95,36 @@ export const BackgroundMusic: React.FC = () => {
     };
   }, []);
 
+  // Efecto para intentar reproducir en cualquier interacción del usuario
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || isPlaying) return;
+
+    const handleUserInteraction = async () => {
+      if (audio.paused && autoplayBlocked) {
+        try {
+          await audio.play();
+          setIsPlaying(true);
+          setAutoplayBlocked(false);
+        } catch (error) {
+          console.log('Aún bloqueado después de interacción');
+        }
+      }
+    };
+
+    // Agregar listeners más amplios
+    const events = ['mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'keydown', 'keyup', 'scroll', 'wheel'];
+    events.forEach(event => {
+      document.addEventListener(event, handleUserInteraction, { passive: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleUserInteraction);
+      });
+    };
+  }, [isPlaying, autoplayBlocked]);
+
   const toggleMute = () => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -73,6 +135,19 @@ export const BackgroundMusic: React.FC = () => {
     } else {
       audio.volume = 0;
       setIsMuted(true);
+    }
+  };
+
+  const startMusic = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      await audio.play();
+      setIsPlaying(true);
+      setAutoplayBlocked(false);
+    } catch (error) {
+      console.error('Error al reproducir música:', error);
     }
   };
 
@@ -94,17 +169,17 @@ export const BackgroundMusic: React.FC = () => {
 
       {/* Controles de música flotantes */}
       <div className="fixed bottom-4 right-4 z-40">
-        {/* Botón principal para mostrar/ocultar controles */}
+        {/* Botón principal para mostrar/ocultar controles o iniciar música */}
         <button
-          onClick={() => setShowControls(!showControls)}
+          onClick={autoplayBlocked ? startMusic : () => setShowControls(!showControls)}
           className="bg-gray-800/80 backdrop-blur-sm border border-gray-600 rounded-full p-3 hover:bg-gray-700/80 transition-all duration-200 shadow-lg"
-          title="Controles de música"
+          title={autoplayBlocked ? "Iniciar música" : "Controles de música"}
         >
           <Music className="h-5 w-5 text-white" />
         </button>
 
         {/* Panel de controles */}
-        {showControls && (
+        {showControls && !autoplayBlocked && (
           <div className="absolute bottom-16 right-0 bg-gray-800/90 backdrop-blur-sm border border-gray-600 rounded-xl p-3 shadow-xl">
             <div className="flex items-center space-x-3">
               {/* Botón mute/unmute */}
