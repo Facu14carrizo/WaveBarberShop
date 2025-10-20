@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, User, Scissors } from 'lucide-react';
+import { Calendar, User } from 'lucide-react';
 
 interface HeaderProps {
   view: 'customer' | 'owner';
@@ -34,14 +34,12 @@ export const Header: React.FC<HeaderProps> = ({ view, onViewChange }) => {
                 <circle cx="17.5" cy="6.5" r="1.25" fill="url(#igGradient)" />
               </svg>
             </a>
-            <div className="bg-purple-500/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-purple-500/30 animate-glow">
-              <Scissors className="h-6 w-6 sm:h-8 sm:w-8 text-purple-300" />
-            </div>
+            <img src="/WaveBarberIcon.png" alt="Wave icon" className="h-16 w-16 sm:h-18 sm:w-18 object-contain" />
             <div className="text-center">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight drop-shadow-lg animate-shimmer">
                 💈𝙒𝘼𝙑𝙀💈
               </h1>
-              <p className="text-purple-200 text-xs sm:text-sm font-medium animate-fade-in ml-2 sm:ml-3">
+              <p className="text-purple-200 text-xs sm:text-sm font-medium animate-fade-in ml-1 sm:ml-1">
                 Barbería Premium
               </p>
             </div>

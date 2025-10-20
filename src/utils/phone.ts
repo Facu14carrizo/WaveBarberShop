@@ -35,10 +35,23 @@ export function normalizePhoneForWhatsApp(rawPhone: string, defaultCountry: 'AR'
   return onlyDigits;
 }
 
-export function buildWhatsAppLink(rawPhone: string, defaultCountry: 'AR' | 'INT' = 'AR'): string {
+export function buildWhatsAppLink(rawPhone: string, defaultCountry: 'AR' | 'INT' = 'AR', message?: string): string {
   const normalized = normalizePhoneForWhatsApp(rawPhone, defaultCountry);
   if (!normalized) return 'https://wa.me/';
-  return `https://wa.me/${normalized}`;
+  
+  const baseUrl = `https://wa.me/${normalized}`;
+  
+  if (message) {
+    const encodedMessage = encodeURIComponent(message);
+    return `${baseUrl}?text=${encodedMessage}`;
+  }
+  
+  return baseUrl;
+}
+
+export function buildSobreturnoWhatsAppLink(rawPhone: string, defaultCountry: 'AR' | 'INT' = 'AR'): string {
+  const message = `¡Que onda! 👋 Me interesa agendar un *SOBRETURNO* 💈\n\n¡Gracias! 🙏`;
+  return buildWhatsAppLink(rawPhone, defaultCountry, message);
 }
 
 

@@ -12,13 +12,22 @@ export const BackgroundMusic: React.FC = () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    // Configurar audio
+    // Configurar audio para iOS
     audio.volume = 0.3; // Volumen moderado (30%)
     audio.loop = true; // Repetir automáticamente
+    audio.preload = 'auto'; // Precargar el audio
+    audio.muted = false; // Asegurar que no esté silenciado
+    
+    // Sincronizar el estado inicial
+    setIsMuted(audio.muted);
 
     // Función para intentar reproducir
     const attemptPlay = async () => {
       try {
+        // Para iOS, necesitamos asegurar que el audio no esté silenciado
+        audio.muted = false;
+        audio.volume = 0.3;
+        
         await audio.play();
         setIsPlaying(true);
         setAutoplayBlocked(false);
@@ -30,23 +39,25 @@ export const BackgroundMusic: React.FC = () => {
       }
     };
 
-    // Múltiples intentos de autoplay
+    // Detectar si es iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    // Para iOS, ser más agresivo con los intentos
     const tryAutoplay = async () => {
-      // Intento inmediato
-      if (await attemptPlay()) return;
-
-      // Intento después de 1 segundo
-      setTimeout(async () => {
+      if (isIOS) {
+        // En iOS, intentar múltiples veces con diferentes estrategias
+        for (let i = 0; i < 5; i++) {
+          if (await attemptPlay()) return;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      } else {
+        // Para otros dispositivos, intentos más espaciados
         if (await attemptPlay()) return;
-
-        // Intento después de 3 segundos
         setTimeout(async () => {
           if (await attemptPlay()) return;
-
-          // Intento después de 5 segundos
           setTimeout(attemptPlay, 2000);
-        }, 2000);
-      }, 1000);
+        }, 1000);
+      }
     };
 
     // Iniciar intentos
@@ -59,10 +70,13 @@ export const BackgroundMusic: React.FC = () => {
       }
     };
 
-    // Agregar listeners para eventos de usuario
-    const events = ['click', 'touchstart', 'keydown', 'scroll'];
+    // Agregar listeners más amplios para iOS
+    const events = isIOS 
+      ? ['click', 'touchstart', 'touchend', 'keydown', 'scroll', 'mousemove', 'mouseup', 'focus']
+      : ['click', 'touchstart', 'keydown', 'scroll'];
+    
     events.forEach(event => {
-      document.addEventListener(event, unlockAudio, { once: true });
+      document.addEventListener(event, unlockAudio, { once: true, passive: true });
     });
 
     return () => {
@@ -83,15 +97,21 @@ export const BackgroundMusic: React.FC = () => {
       // Cuando termine la canción, reiniciar automáticamente (por el loop)
       setIsPlaying(true);
     };
+    const handleVolumeChange = () => {
+      // Sincronizar el estado de mute con el audio real
+      setIsMuted(audio.muted);
+    };
 
     audio.addEventListener('play', handlePlay);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('volumechange', handleVolumeChange);
 
     return () => {
       audio.removeEventListener('play', handlePlay);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('volumechange', handleVolumeChange);
     };
   }, []);
 
@@ -129,11 +149,17 @@ export const BackgroundMusic: React.FC = () => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (isMuted) {
+    // Obtener el estado actual del audio
+    const currentlyMuted = audio.muted;
+    
+    if (currentlyMuted) {
+      // Desilenciar
+      audio.muted = false;
       audio.volume = 0.3;
       setIsMuted(false);
     } else {
-      audio.volume = 0;
+      // Silenciar
+      audio.muted = true;
       setIsMuted(true);
     }
   };
@@ -143,11 +169,27 @@ export const BackgroundMusic: React.FC = () => {
     if (!audio) return;
 
     try {
+      // Para iOS, asegurar configuración correcta antes de reproducir
+      audio.muted = false;
+      audio.volume = 0.3;
+      
       await audio.play();
       setIsPlaying(true);
       setAutoplayBlocked(false);
     } catch (error) {
       console.error('Error al reproducir música:', error);
+      // En caso de error, intentar una vez más después de un breve delay
+      setTimeout(async () => {
+        try {
+          audio.muted = false;
+          audio.volume = 0.3;
+          await audio.play();
+          setIsPlaying(true);
+          setAutoplayBlocked(false);
+        } catch (retryError) {
+          console.error('Error en reintento:', retryError);
+        }
+      }, 100);
     }
   };
 
