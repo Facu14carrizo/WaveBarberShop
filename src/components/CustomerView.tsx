@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, MapPin, Phone, Clock, Star, Award, Shield } from 'lucide-react';
 import { TimeSlotGrid } from './TimeSlotGrid';
 import { ServiceSelector } from './ServiceSelector';
@@ -8,6 +8,7 @@ import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAva
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { Appointment, Service } from '../types';
 import { services } from '../data/services';
+import { buildWhatsAppLink } from '../utils/phone';
 
 interface CustomerViewProps {
   appointments: Appointment[];
@@ -23,6 +24,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
+  const [showNoSlotsModal, setShowNoSlotsModal] = useState(false);
 
   const availableDays = getAvailableDays(ranges as CustomTimeRanges);
   const currentDay = availableDays.find(day => day.day === selectedDay)!;
@@ -35,6 +37,15 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     ...slot,
     available: selectedService ? isSlotAvailable(selectedDate, slot.time, appointments) : false
   }));
+
+  useEffect(() => {
+    if (selectedService) {
+      const noneAvailable = availableSlots.length > 0 && availableSlots.every(s => !s.available);
+      setShowNoSlotsModal(noneAvailable);
+    } else {
+      setShowNoSlotsModal(false);
+    }
+  }, [selectedService, selectedDay, availableSlots]);
 
   const handleSlotSelect = (time: string) => {
     setSelectedTime(time);
@@ -216,6 +227,28 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 ${selectedService.price.toLocaleString()}
               </span>
             </button>
+          </div>
+        )}
+
+        {/* No Slots Notice under the slots */}
+        {showNoSlotsModal && (
+          <div className="mt-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 text-center">
+              <h4 className="text-base font-bold text-white mb-1">No hay turnos disponibles</h4>
+              <p className="text-gray-300 text-sm">
+                Para {selectedDate} no quedan horarios libres. Aunque no haya turnos, contactate con Wave para agendar un <span className="text-orange-400 font-semibold">SOBRETURNO</span>.
+              </p>
+              <div className="mt-3 flex justify-center">
+                <a
+                  href={buildWhatsAppLink('+54 9 11 3520-9748', 'AR')}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium transition-colors"
+                >
+                  Contactar por WhatsApp
+                </a>
+              </div>
+            </div>
           </div>
         )}
         </>

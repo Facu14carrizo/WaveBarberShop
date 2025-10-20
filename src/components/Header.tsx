@@ -1,5 +1,5 @@
 import React from 'react';
-import { Scissors, Calendar, User, Instagram } from 'lucide-react';
+import { Calendar, User } from 'lucide-react';
 
 interface HeaderProps {
   view: 'customer' | 'owner';
@@ -16,19 +16,30 @@ export const Header: React.FC<HeaderProps> = ({ view, onViewChange }) => {
               href="https://www.instagram.com/wave.barber_"
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-pink-500/30 hover:border-pink-400/50 transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 animate-pulse-slow"
+              className="text-white hover:text-purple-300 transition-colors duration-300"
               aria-label="Síguenos en Instagram"
             >
-              <Instagram className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              <svg viewBox="0 0 24 24" className="h-7 w-7 sm:h-8 sm:w-8" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="igGradient" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#F58529" />
+                    <stop offset="35%" stopColor="#DD2A7B" />
+                    <stop offset="70%" stopColor="#8134AF" />
+                    <stop offset="100%" stopColor="#515BD4" />
+                    <animateTransform attributeName="gradientTransform" type="rotate" from="0 12 12" to="360 12 12" dur="6s" repeatCount="indefinite" />
+                  </linearGradient>
+                </defs>
+                <rect x="3" y="3" width="18" height="18" rx="5" stroke="url(#igGradient)" strokeWidth="2" />
+                <circle cx="12" cy="12" r="4" stroke="url(#igGradient)" strokeWidth="2" />
+                <circle cx="17.5" cy="6.5" r="1.25" fill="url(#igGradient)" />
+              </svg>
             </a>
-            <div className="bg-purple-500/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-purple-500/30 animate-glow">
-              <Scissors className="h-6 w-6 sm:h-8 sm:w-8 text-purple-300" />
-            </div>
+            <img src="/WaveBarberIcon.png" alt="Wave icon" className="h-16 w-16 sm:h-18 sm:w-18 object-contain" />
             <div>
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight drop-shadow-lg animate-shimmer">
                 💈𝙒𝘼𝙑𝙀💈
               </h1>
-              <p className="text-purple-200 text-xs sm:text-sm font-medium animate-fade-in">
+              <p className="text-purple-200 text-xs sm:text-sm font-medium animate-fade-in ml-2 sm:ml-3">
                 Barbería Premium
               </p>
             </div>

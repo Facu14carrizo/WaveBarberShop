@@ -15,7 +15,7 @@ export const services: Service[] = [
     duration: 20,
     price: 5000,
     description: 'Perfilado, reducción de volumen y arreglo de la barba con navaja, máquina y tijera.',
-    icon: '🧔'
+    icon: '🪒 '
   },
   {
     id: 'designs',
