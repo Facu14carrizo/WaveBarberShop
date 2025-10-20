@@ -6,7 +6,7 @@ export const services: Service[] = [
     name: 'Corte Clásico',
     duration: 30,
     price: 10000,
-    description: 'Corte tradicional con tijera y máquina. Perfilado de cejas y barba',
+    description: 'Corte tradicional con tijera y máquina. Perfilado de cejas y barba.',
     icon: '✂️'
   },
   {
@@ -19,10 +19,10 @@ export const services: Service[] = [
   },
   {
     id: 'designs',
-    name: 'Diseños',
+    name: 'Corte + Diseño',
     duration: 40,
     price: 12000,
-    description: 'Diseños y líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
+    description: 'Diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
     icon: '🎨'
   }
 ];

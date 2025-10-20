@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Phone, User, Calendar, Clock, CheckCircle, Mail, MessageSquare } from 'lucide-react';
+import { Phone, User, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Appointment, Service } from '../types';
 
 interface BookingFormProps {
@@ -19,10 +19,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showPolicies, setShowPolicies] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,9 +35,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       time: selectedTime,
       customerName,
       customerPhone,
-      customerEmail: customerEmail || undefined,
       service: selectedService,
-      notes: notes || undefined,
       status: 'confirmed',
       updatedAt: new Date(),
       reminderSent: false
@@ -140,7 +137,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
-                Teléfono *
+                WhatsApp *
               </label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
@@ -155,46 +152,28 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
-                Email (opcional)
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
-                <input
-                  type="email"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
-                  placeholder="tu@email.com"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1 sm:mb-2">
-                Notas adicionales (opcional)
-              </label>
-              <div className="relative">
-                <MessageSquare className="absolute left-3 top-3 h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 resize-none text-sm sm:text-base"
-                  placeholder="Alguna preferencia especial o comentario..."
-                />
-              </div>
-            </div>
           </div>
 
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg sm:rounded-xl p-3 sm:p-4">
-            <h4 className="font-semibold text-white mb-2 text-sm sm:text-base">Políticas de Cancelación</h4>
-            <ul className="text-xs sm:text-sm text-gray-400 space-y-1">
-              <li>• Cancelaciones hasta 2 horas antes sin cargo</li>
-              <li>• Llegadas tardías pueden resultar en reducción del servicio</li>
-              <li>• Recibirás confirmación por WhatsApp</li>
-            </ul>
+            <button
+              type="button"
+              onClick={() => setShowPolicies(!showPolicies)}
+              className="flex items-center justify-between w-full text-left"
+            >
+              <h4 className="font-semibold text-white text-sm sm:text-base">Políticas de Cancelación</h4>
+              {showPolicies ? (
+                <ChevronUp className="h-4 w-4 text-gray-400" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              )}
+            </button>
+            {showPolicies && (
+              <ul className="text-xs sm:text-sm text-gray-400 space-y-1 mt-3">
+                <li>• Cancelaciones hasta 2 horas antes sin cargo</li>
+                <li>• Llegadas tardías pueden resultar en reducción del servicio</li>
+                <li>• Recibirás confirmación por WhatsApp</li>
+              </ul>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
@@ -210,7 +189,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               disabled={isSubmitting}
               className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg sm:rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-500/25 text-sm sm:text-base"
             >
-              {isSubmitting ? 'Confirmando...' : `Confirmar - $${selectedService.price.toLocaleString()}`}
+              {isSubmitting ? 'Confirmando...' : `Confirmar  $${selectedService.price.toLocaleString()}`}
             </button>
           </div>
         </form>
