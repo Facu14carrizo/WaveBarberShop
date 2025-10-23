@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
@@ -29,8 +29,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     customerName: '', 
     customerPhone: '', 
     customerEmail: '', 
-    notes: '' 
+    notes: '',
+    additionalNames: '' // coma-separado para edición rápida
   });
+  const [lastAction, setLastAction] = useState<null | { type: 'delete' | 'update'; snapshot: Appointment }>(null);
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -45,8 +47,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   }, []);
   const filteredAppointments = appointments.filter(apt => {
     const matchesStatus = filterStatus === 'all' || apt.status === filterStatus;
+    const companions = (apt.additionalCustomerNames || []).join(' ').toLowerCase();
     const matchesSearch = searchTerm === '' || 
       apt.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      companions.includes(searchTerm.toLowerCase()) ||
       apt.customerPhone.includes(searchTerm);
     return matchesStatus && matchesSearch;
   });
@@ -78,42 +82,87 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       customerName: appointment.customerName,
       customerPhone: appointment.customerPhone,
       customerEmail: appointment.customerEmail || '',
-      notes: appointment.notes || ''
+      notes: appointment.notes || '',
+      additionalNames: (appointment.additionalCustomerNames || []).join(', ')
     });
   };
 
   const handleEditSave = (id: string) => {
+    const parsedAdditional = editForm.additionalNames
+      .split(',')
+      .map(n => n.trim())
+      .filter(n => n.length > 0)
+      .slice(0, 2);
     onUpdateAppointment(id, { 
-      ...editForm, 
+      customerName: editForm.customerName,
+      customerPhone: editForm.customerPhone,
       customerEmail: editForm.customerEmail || undefined,
       notes: editForm.notes || undefined,
+      additionalCustomerNames: parsedAdditional.length > 0 ? parsedAdditional : undefined,
       updatedAt: new Date()
     });
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '' });
   };
 
   const handleEditCancel = () => {
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '' });
   };
 
   const handleStatusChange = (id: string, status: Appointment['status']) => {
+    const old = appointments.find(a => a.id === id);
+    if (old) setLastAction({ type: 'update', snapshot: old });
     onUpdateAppointment(id, { status, updatedAt: new Date() });
   };
 
-  const AppointmentCard: React.FC<{ appointment: Appointment; isToday: boolean }> = ({ 
-    appointment, 
-    isToday 
-  }) => {
-    const isSobreturno = appointment.time.endsWith(':30');
-    const borderClass = isSobreturno
-      ? 'border-l-orange-500'
-      : isToday
-        ? 'border-l-green-500'
-        : 'border-l-purple-500';
-    return (
-    <div className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300`}>
+  const handleDelete = (appointment: Appointment) => {
+    setLastAction({ type: 'delete', snapshot: appointment });
+    onDeleteAppointment(appointment.id);
+  };
+
+  const handleUndo = () => {
+    if (!lastAction) return;
+    const snap = lastAction.snapshot;
+    if (lastAction.type === 'delete') {
+      onNewAppointment({
+        date: snap.date,
+        time: snap.time,
+        customerName: snap.customerName,
+        additionalCustomerNames: snap.additionalCustomerNames,
+        customerPhone: snap.customerPhone,
+        customerEmail: snap.customerEmail,
+        status: snap.status,
+        service: snap.service,
+        notes: snap.notes
+      });
+    } else if (lastAction.type === 'update') {
+      onUpdateAppointment(snap.id, {
+        customerName: snap.customerName,
+        customerPhone: snap.customerPhone,
+        customerEmail: snap.customerEmail,
+        notes: snap.notes,
+        status: snap.status,
+        service: snap.service,
+        additionalCustomerNames: snap.additionalCustomerNames,
+        date: snap.date,
+        time: snap.time,
+        updatedAt: new Date()
+      });
+    }
+    setLastAction(null);
+  };
+
+  const renderAppointmentCard = (appointment: Appointment, isToday: boolean) => (
+    (() => {
+      const isSobreturno = appointment.time.endsWith(':30');
+      const borderClass = isSobreturno
+        ? 'border-l-orange-500'
+        : isToday
+          ? 'border-l-green-500'
+          : 'border-l-purple-500';
+      return (
+    <div key={appointment.id} className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center space-x-3">
           <div className={`rounded-full p-2 ${
@@ -200,6 +249,19 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 resize-none"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Acompañantes (separados por coma, máx. 2)
+            </label>
+            <input
+              type="text"
+              value={editForm.additionalNames}
+              onChange={(e) => setEditForm({ ...editForm, additionalNames: e.target.value })}
+              placeholder="Ej: Juan, Pedro"
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            />
+          </div>
           
           <div className="flex space-x-2">
             <button
@@ -234,6 +296,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <User className="h-5 w-5 text-gray-400" />
             <div>
               <p className="font-semibold text-white">{appointment.customerName}</p>
+              {appointment.additionalCustomerNames && appointment.additionalCustomerNames.length > 0 && (
+                <p className="text-sm text-gray-400">Acompañantes: {appointment.additionalCustomerNames.filter(n => n && n.trim().length > 0).join(', ')}</p>
+              )}
             </div>
           </div>
           
@@ -297,7 +362,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                   <span className="text-sm">Editar</span>
                 </button>
                 <button
-                  onClick={() => onDeleteAppointment(appointment.id)}
+                  onClick={() => handleDelete(appointment)}
                   className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors duration-200"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -320,8 +385,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         </div>
       )}
     </div>
+      );
+    })()
   );
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 pb-safe">
@@ -462,11 +528,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {todayAppointments.map((appointment) => (
-                <AppointmentCard
-                  key={appointment.id}
-                  appointment={appointment}
-                  isToday={true}
-                />
+                renderAppointmentCard(appointment, true)
               ))}
             </div>
           </div>
@@ -475,16 +537,23 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         {/* Upcoming Appointments */}
         {filteredAppointments.filter(apt => apt.status !== 'cancelled').length > todayAppointments.length && (
           <div>
-            <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
-              Todas las Reservas ({filteredAppointments.length})
-            </h3>
+            <div className="flex items-center justify-between mb-4 sm:mb-6">
+              <h3 className="text-xl sm:text-2xl font-bold text-white">
+                Todas las Reservas ({filteredAppointments.length})
+              </h3>
+              <button
+                onClick={handleUndo}
+                disabled={!lastAction}
+                className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors ${lastAction ? 'bg-gray-700 text-white hover:bg-gray-600 border border-gray-600' : 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'}`}
+                title={lastAction ? 'Deshacer última acción (Ctrl+Z)' : 'Nada que deshacer'}
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>Deshacer</span>
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {filteredAppointments.map((appointment) => (
-                <AppointmentCard
-                  key={appointment.id}
-                  appointment={appointment}
-                  isToday={todayAppointments.some(t => t.id === appointment.id)}
-                />
+                renderAppointmentCard(appointment, todayAppointments.some(t => t.id === appointment.id))
               ))}
             </div>
           </div>
@@ -722,6 +791,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
   const [time, setTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [additionalNames, setAdditionalNames] = useState<string[]>([]);
   const selectedService: Service | undefined = services.find(s => s.id === serviceId);
 
   const buildHalfHours = () => {
@@ -758,6 +828,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
       date: selectedDate,
       time,
       customerName,
+      additionalCustomerNames: additionalNames,
       customerPhone,
       status: 'confirmed',
       service: selectedService
@@ -765,6 +836,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
     setTime('');
     setCustomerName('');
     setCustomerPhone('');
+    setAdditionalNames([]);
   };
 
   return (
@@ -825,6 +897,44 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
           className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
         />
       </div>
+
+  {/* Acompañantes Sobreturno */}
+  <div className="mt-3 space-y-2">
+    {additionalNames.map((n, idx) => (
+      <div key={idx} className="relative">
+        <input
+          type="text"
+          value={n}
+          onChange={(e) => {
+            const copy = [...additionalNames];
+            copy[idx] = e.target.value;
+            setAdditionalNames(copy);
+          }}
+          placeholder={`Acompañante ${idx + 1}`}
+          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 pr-9"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const copy = [...additionalNames];
+            copy.splice(idx, 1);
+            setAdditionalNames(copy);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-red-600 text-white text-xs px-2 py-1 rounded"
+        >
+          ×
+        </button>
+      </div>
+    ))}
+    <button
+      type="button"
+      onClick={() => { if (additionalNames.length < 2) setAdditionalNames([...additionalNames, '']); }}
+      disabled={additionalNames.length >= 2}
+      className={`px-3 py-2 rounded-lg text-sm ${additionalNames.length < 2 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}
+    >
+      + Agregar acompañante
+    </button>
+  </div>
 
       {!slotAvailable && time && (
         <p className="text-xs text-yellow-400">Ese horario ya está ocupado.</p>

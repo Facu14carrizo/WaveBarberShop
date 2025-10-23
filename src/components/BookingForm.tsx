@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, User, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Appointment, Service } from '../types';
+import { scheduleWhatsAppReminders } from '../utils/whatsappReminders';
 
 interface BookingFormProps {
   selectedDate: string;
@@ -18,6 +19,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   onCancel
 }) => {
   const [customerName, setCustomerName] = useState('');
+  const [additionalNames, setAdditionalNames] = useState<string[]>([]); // hasta 2 adicionales
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -34,12 +36,30 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       date: selectedDate,
       time: selectedTime,
       customerName,
+      additionalCustomerNames: additionalNames,
       customerPhone,
       service: selectedService,
       status: 'confirmed',
       updatedAt: new Date(),
       reminderSent: false
     };
+
+    // Programar recordatorios de WhatsApp automáticamente
+    try {
+      await scheduleWhatsAppReminders(
+        `temp-${Date.now()}`, // ID temporal hasta que se guarde en la DB
+        customerName,
+        customerPhone,
+        selectedService.name,
+        selectedService.price,
+        selectedDate,
+        selectedTime
+      );
+      console.log('✅ Recordatorios de WhatsApp programados');
+    } catch (error) {
+      console.error('❌ Error al programar recordatorios:', error);
+      // No bloqueamos la reserva si falla el envío de recordatorios
+    }
 
     onBookingComplete(appointment);
     setShowConfirmation(true);
@@ -74,6 +94,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                 <p><strong>Duración:</strong> {selectedService.duration} min</p>
                 <p><strong>Precio:</strong> ${selectedService.price.toLocaleString()}</p>
                 <p><strong>Cliente:</strong> {customerName}</p>
+                {additionalNames.length > 0 && (
+                  <p><strong>Acompañantes:</strong> {additionalNames.filter(n => n.trim().length > 0).join(', ')}</p>
+                )}
               </div>
             </div>
           </div>
@@ -128,11 +151,53 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   type="text"
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
+                  className="w-full pl-9 sm:pl-10 pr-10 sm:pr-12 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
                   placeholder="Ingresa tu nombre"
                   required
                 />
+                {/* Botón para agregar personas */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (additionalNames.length < 2) setAdditionalNames([...additionalNames, '']);
+                  }}
+                  className={`absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-xs font-medium transition-colors ${additionalNames.length < 2 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}
+                  title={additionalNames.length < 2 ? 'Agregar otra persona' : 'Máximo alcanzado'}
+                  disabled={additionalNames.length >= 2}
+                >
+                  +
+                </button>
               </div>
+
+              {/* Campos adicionales */}
+              {additionalNames.map((name, idx) => (
+                <div key={idx} className="relative mt-2">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      const copy = [...additionalNames];
+                      copy[idx] = e.target.value;
+                      setAdditionalNames(copy);
+                    }}
+                    className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
+                    placeholder={`Nombre adicional ${idx + 1}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const copy = [...additionalNames];
+                      copy.splice(idx, 1);
+                      setAdditionalNames(copy);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-md text-xs font-medium bg-red-600 text-white hover:bg-red-700"
+                    title="Quitar"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
             </div>
 
             <div>

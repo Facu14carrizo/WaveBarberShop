@@ -3,6 +3,7 @@ export interface Appointment {
   date: string;
   time: string;
   customerName: string;
+  additionalCustomerNames?: string[]; // hasta 2 adicionales
   customerPhone: string;
   customerEmail?: string;
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';

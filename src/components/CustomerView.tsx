@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, MapPin, Phone, Clock, Star, Award, Shield } from 'lucide-react';
+import { Calendar, MapPin, Star, Award, Shield } from 'lucide-react';
 import { TimeSlotGrid } from './TimeSlotGrid';
 import { ServiceSelector } from './ServiceSelector';
 import { BookingForm } from './BookingForm';
@@ -7,7 +7,7 @@ import { BackButton } from './BackButton';
 import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges } from '../utils/timeSlots';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { Appointment, Service } from '../types';
-import { services } from '../data/services';
+// import { services } from '../data/services';
 import { buildSobreturnoWhatsAppLink } from '../utils/phone';
 
 interface CustomerViewProps {
@@ -129,7 +129,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
                 </div>
                 <div>
                   <p className="font-semibold text-white text-sm sm:text-base">Experiencia</p>
-                  <p className="text-xs sm:text-sm text-gray-400">+5 años</p>
+                  <p className="text-xs sm:text-sm text-gray-400">+7 años</p>
                 </div>
               </div>
               
