@@ -10,11 +10,11 @@ div align="center">
   
   ### 🎥 Vista de Cliente
   
-  https://github.com/user-attachments/assets/Demo-WaveBarber1.mp4
+  https://github.com/Facu14carrizo/WaveBarberShop/issues/1#issue-3534680316
   
   ### 👨‍💼 Panel de Administración
   
-  https://github.com/user-attachments/assets/Demo-WaveBarber2.mp4
+  https://github.com/Facu14carrizo/WaveBarberShop/issues/2#issue-3534681257
   
 </div>
 
