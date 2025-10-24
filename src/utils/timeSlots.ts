@@ -13,28 +13,34 @@ const parseTimeToMinutes = (time: string): number => {
 export const getNextFriday = (): Date => {
   const today = new Date();
   const currentDay = today.getDay();
-  const daysUntilFriday = (5 - currentDay + 7) % 7; // 5 = Friday (0-indexed)
-  
-  // If today is Friday, get next Friday
+  if (currentDay === 5) { // Hoy es viernes
+    // Si todavía no terminó el día (antes de las 23:59:59.999)
+    const endOfToday = new Date(today);
+    endOfToday.setHours(23, 59, 59, 999);
+    if (today <= endOfToday) return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    // Si ya pasó la medianoche, mostrar el viernes siguiente
+  }
+  const daysUntilFriday = (5 - currentDay + 7) % 7;
   const daysToAdd = daysUntilFriday === 0 ? 7 : daysUntilFriday;
-  
   const nextFriday = new Date(today);
   nextFriday.setDate(today.getDate() + daysToAdd);
-  
+  nextFriday.setHours(0, 0, 0, 0);
   return nextFriday;
 };
 
 export const getNextSaturday = (): Date => {
   const today = new Date();
   const currentDay = today.getDay();
-  const daysUntilSaturday = (6 - currentDay + 7) % 7; // 6 = Saturday (0-indexed)
-  
-  // If today is Saturday, get next Saturday
+  if (currentDay === 6) { // Hoy es sábado
+    const endOfToday = new Date(today);
+    endOfToday.setHours(23, 59, 59, 999);
+    if (today <= endOfToday) return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  }
+  const daysUntilSaturday = (6 - currentDay + 7) % 7;
   const daysToAdd = daysUntilSaturday === 0 ? 7 : daysUntilSaturday;
-  
   const nextSaturday = new Date(today);
   nextSaturday.setDate(today.getDate() + daysToAdd);
-  
+  nextSaturday.setHours(0, 0, 0, 0);
   return nextSaturday;
 };
 
