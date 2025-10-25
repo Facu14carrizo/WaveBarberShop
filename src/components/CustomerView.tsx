@@ -242,7 +242,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 text-center">
               <h4 className="text-base font-bold text-red-400 mb-1">No hay turnos disponibles</h4>
               <p className="text-gray-300 text-sm">
-                Para {selectedDate} no quedan horarios libres. Aunque no haya turnos, contactate con Wave para agendar un <span className="text-orange-400 font-semibold">SOBRETURNO</span>.
+                Contactate con WAVE para agendar un <span className="text-orange-400 font-semibold">SOBRETURNO</span>.
               </p>
               <div className="mt-3 flex justify-center">
                 <a
