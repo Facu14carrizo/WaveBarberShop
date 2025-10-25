@@ -516,7 +516,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               }`}
             >
               <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-sm sm:text-base">Analytics</span>
+              <span className="text-sm sm:text-base">Métricas</span>
             </button>
             <button
               onClick={() => setActiveTab('settings')}
