@@ -13,12 +13,20 @@ const parseTimeToMinutes = (time: string): number => {
 export const getNextFriday = (): Date => {
   const today = new Date();
   const currentDay = today.getDay();
-  if (currentDay === 5) { // Hoy es viernes
-    // Si todavía no terminó el día (antes de las 23:59:59.999)
-    const endOfToday = new Date(today);
-    endOfToday.setHours(23, 59, 59, 999);
-    if (today <= endOfToday) return new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    // Si ya pasó la medianoche, mostrar el viernes siguiente
+  // Si es viernes o sábado (5 o 6), mostrar el viernes actual hasta las 00:01hs del domingo (día 0)
+  if (currentDay === 5 || currentDay === 6) {
+    // domingo a las 00:01
+    const switchMoment = new Date(today);
+    switchMoment.setDate(switchMoment.getDate() + (7 - currentDay) % 7 + 0); // próximo domingo del ciclo semanal
+    switchMoment.setHours(0, 1, 0, 0); // 00:01hs
+    if (today < switchMoment) {
+      // Último viernes
+      const lastFriday = new Date(today);
+      lastFriday.setDate(today.getDate() - ((currentDay - 5 + 7) % 7));
+      lastFriday.setHours(0, 0, 0, 0);
+      return lastFriday;
+    }
+    // Si ya es domingo después de las 00:01, mostrar el próximo viernes
   }
   const daysUntilFriday = (5 - currentDay + 7) % 7;
   const daysToAdd = daysUntilFriday === 0 ? 7 : daysUntilFriday;
@@ -31,10 +39,17 @@ export const getNextFriday = (): Date => {
 export const getNextSaturday = (): Date => {
   const today = new Date();
   const currentDay = today.getDay();
-  if (currentDay === 6) { // Hoy es sábado
-    const endOfToday = new Date(today);
-    endOfToday.setHours(23, 59, 59, 999);
-    if (today <= endOfToday) return new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // Si es sábado, mostrar el sábado actual hasta las 00:01hs del domingo
+  if (currentDay === 6) {
+    const switchMoment = new Date(today);
+    switchMoment.setDate(switchMoment.getDate() + 1); // próximo día (domingo)
+    switchMoment.setHours(0, 1, 0, 0); // 00:01hs
+    if (today < switchMoment) {
+      const thisSaturday = new Date(today);
+      thisSaturday.setHours(0, 0, 0, 0);
+      return thisSaturday;
+    }
+    // Si ya es domingo después de las 00:01, mostrar el próximo sábado
   }
   const daysUntilSaturday = (6 - currentDay + 7) % 7;
   const daysToAdd = daysUntilSaturday === 0 ? 7 : daysUntilSaturday;
