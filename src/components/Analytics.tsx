@@ -1,5 +1,5 @@
 import React from 'react';
-import { DollarSign, Calendar, Users } from 'lucide-react';
+import { DollarSign, Calendar, TrendingUp } from 'lucide-react';
 import { Appointment } from '../types';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, CustomTimeRanges } from '../utils/timeSlots';
@@ -50,6 +50,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const totalAppointments = appointments.length;
     const totalCuts = done.length;
     const totalRevenue = done.reduce((sum, a) => sum + a.service.price, 0);
+    // Crecimiento mensual (ingresos mes actual vs mes anterior)
+    const now = new Date();
+    const thisMonthIdx = now.getMonth();
 
     const monthlyMap = new Map<string, { idx: number; total: number }>();
     const dailyMap = new Map<string, { monthIdx: number; day: number; total: number }>();
@@ -68,6 +71,16 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const monthly = Array.from(monthlyMap.entries())
       .map(([monthName, v]) => ({ monthName, total: v.total, idx: v.idx }))
       .sort((a, b) => a.idx - b.idx);
+
+    const currentMonthTotal = monthly.find(m => m.idx === thisMonthIdx)?.total || 0;
+    const prevMonthIdx = (thisMonthIdx + 11) % 12;
+    const prevMonthTotal = monthly.find(m => m.idx === prevMonthIdx)?.total || 0;
+    let growthRate = 0;
+    if (prevMonthTotal === 0) {
+      growthRate = currentMonthTotal > 0 ? 100 : 0;
+    } else {
+      growthRate = ((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100;
+    }
 
     const daily = Array.from(dailyMap.entries())
       .map(([label, v]) => ({ label, ...v }))
@@ -102,7 +115,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       }
     } catch {}
 
-    return { totalAppointments, totalCuts, totalRevenue, monthly, daily, friday, saturday };
+    return { totalAppointments, totalCuts, totalRevenue, monthly, daily, friday, saturday, growthRate };
   }, [appointments, ranges]);
 
   return (
@@ -113,13 +126,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       </div>
 
       {/* Cards principales */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
-          <div className="bg-purple-500/20 border border-purple-500/30 rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3">
-            <Users className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" />
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-white">{data.totalCuts}</p>
-          <p className="text-xs sm:text-sm text-gray-400">Cortes totales</p>
+          {(() => {
+            const color = data.growthRate > 0 ? 'green' : data.growthRate < 0 ? 'red' : 'gray';
+            const circleClass = color === 'green' ? 'bg-green-500/20 border border-green-500/30' : color === 'red' ? 'bg-red-500/20 border border-red-500/30' : 'bg-gray-500/20 border border-gray-500/30';
+            const iconClass = color === 'green' ? 'text-green-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
+            return (
+              <div className={`rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3 ${circleClass}`}>
+                <TrendingUp className={`h-5 w-5 sm:h-6 sm:w-6 ${iconClass}`} />
+              </div>
+            );
+          })()}
+          <p className="text-xl sm:text-2xl font-bold text-white">{Math.abs(data.growthRate).toFixed(1)}%</p>
+          <p className="text-xs sm:text-sm text-gray-400">Crecimiento mensual</p>
         </div>
 
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
@@ -135,7 +155,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
             <Calendar className="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" />
           </div>
           <p className="text-xl sm:text-2xl font-bold text-white">{data.totalAppointments}</p>
-          <p className="text-xs sm:text-sm text-gray-400">Total Turnos</p>
+          <p className="text-xs sm:text-sm text-gray-400">Turnos totales</p>
         </div>
       </div>
 

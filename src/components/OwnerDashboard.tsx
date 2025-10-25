@@ -691,6 +691,10 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
   const { ranges, addRange, deleteRange, loading } = useSupabaseCustomTimeRanges();
   const { addNotification } = useNotifications();
 
+  const stripWeekday = (s: string) => s.replace(/^[a-záéíóúñ]+\s+/i, '').trim();
+  const fridayDateLabel = stripWeekday(formatDate(getNextFriday()));
+  const saturdayDateLabel = stripWeekday(formatDate(getNextSaturday()));
+
   const toMinutes = (t: string) => {
     const [h, m] = t.split(':').map(Number);
     return h * 60 + (m || 0);
@@ -750,11 +754,16 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
   };
 
   return (
-    <div className="mb-6 sm:mb-8 md:mb-12">
-      <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center">Configuraciones</h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-          <h4 className="text-lg font-semibold text-white mb-4">Añadir horarios adicionales para viernes</h4>
+    <div className="mb-6 sm:mb-8 md:mb-12 space-y-6">
+      <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 text-center">Configuraciones</h3>
+      <p className="text-gray-400 text-sm text-center">Los rangos se guardan en el servidor y se sincronizan en tiempo real. Ya están disponibles para todos los clientes.</p>
+
+      {/* Añadir horarios adicionales + Rangos actuales en layout lado a lado */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Columna izquierda (viernes y sábado apilados) */}
+        <div className="md:col-span-2 space-y-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+          <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center"><Clock className="h-4 w-4 text-purple-300 mr-2" />Añadir horarios adicionales para viernes</h4>
           <div className="flex items-center gap-3 mb-3">
             <select
               value={fridayStart}
@@ -786,10 +795,10 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
           >
             Guardar rango para Viernes
           </button>
-        </div>
+          </div>
 
-        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-          <h4 className="text-lg font-semibold text-white mb-4">Añadir horarios adicionales para sabado</h4>
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+          <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center"><Clock className="h-4 w-4 text-purple-300 mr-2" />Añadir horarios adicionales para sabado</h4>
           <div className="flex items-center gap-3 mb-3">
             <select
               value={saturdayStart}
@@ -821,59 +830,60 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
           >
             Guardar rango para Sábado
           </button>
+          </div>
+        </div>
+ 
+        {/* Columna derecha (Rangos actuales) */}
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6 md:col-span-1">
+          <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center"><Calendar className="h-4 w-4 text-blue-300 mr-2" />Rangos actuales</h4>
+          {loading ? (
+            <p className="text-gray-400">Cargando...</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <h5 className="text-white font-medium mb-2">Viernes <span className="text-gray-400 text-xs">{fridayDateLabel}</span></h5>
+                <div className="flex flex-wrap gap-2">
+                  {ranges.friday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
+                  {ranges.friday.map((r) => (
+                    <div key={`f-${r.start}-${r.end}`} className="inline-flex items-center gap-2 bg-gray-700/60 border border-gray-600 rounded-full px-3 py-1 text-sm">
+                      <span className="text-gray-200">{r.start} a {r.end}</span>
+                      <button
+                        onClick={() => deleteRange('friday', r.start, r.end)}
+                        className="text-red-400 hover:text-red-300"
+                      >Eliminar</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <h5 className="text-white font-medium mb-2">Sábado <span className="text-gray-400 text-xs">{saturdayDateLabel}</span></h5>
+                <div className="flex flex-wrap gap-2">
+                  {ranges.saturday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
+                  {ranges.saturday.map((r) => (
+                    <div key={`s-${r.start}-${r.end}`} className="inline-flex items-center gap-2 bg-gray-700/60 border border-gray-600 rounded-full px-3 py-1 text-sm">
+                      <span className="text-gray-200">{r.start} a {r.end}</span>
+                      <button
+                        onClick={() => deleteRange('saturday', r.start, r.end)}
+                        className="text-red-400 hover:text-red-300"
+                      >Eliminar</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
-      <p className="text-gray-400 text-sm mt-4 text-center">Los rangos se guardan en el servidor y se sincronizan en tiempo real. Ya están disponibles para todos los clientes.</p>
-
-      <div className="mt-6 bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-        <h4 className="text-lg font-semibold text-white mb-4">Rangos actuales</h4>
-        {loading ? (
-          <p className="text-gray-400">Cargando...</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <h5 className="text-white font-medium mb-2">Viernes</h5>
-              <div className="space-y-2">
-                {ranges.friday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
-                {ranges.friday.map((r) => (
-                  <div key={`f-${r.start}-${r.end}`} className="flex items-center justify-between bg-gray-700/60 border border-gray-600 rounded-lg px-3 py-2">
-                    <span className="text-gray-200 text-sm">{r.start} a {r.end}</span>
-                    <button
-                      onClick={() => deleteRange('friday', r.start, r.end)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >Eliminar</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h5 className="text-white font-medium mb-2">Sábado</h5>
-              <div className="space-y-2">
-                {ranges.saturday.length === 0 && <p className="text-gray-500 text-sm">Sin rangos</p>}
-                {ranges.saturday.map((r) => (
-                  <div key={`s-${r.start}-${r.end}`} className="flex items-center justify-between bg-gray-700/60 border border-gray-600 rounded-lg px-3 py-2">
-                    <span className="text-gray-200 text-sm">{r.start} a {r.end}</span>
-                    <button
-                      onClick={() => deleteRange('saturday', r.start, r.end)}
-                      className="text-red-400 hover:text-red-300 text-sm"
-                    >Eliminar</button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
+ 
       {/* Sobreturnos */}
-      <div className="mt-6 bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-        <h4 className="text-lg font-semibold text-white mb-4">Crear Sobreturno (:30)</h4>
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+        <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center"><Clock className="h-4 w-4 text-orange-300 mr-2" />Crear Sobreturno (:30)</h4>
         <SobreturnoForm
           appointments={appointments}
           onNewAppointment={onNewAppointment}
           ranges={ranges as CustomTimeRanges}
         />
-        <p className="text-xs text-gray-400 mt-2">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
+        <p className="text-xs text-gray-400 mt-2 text-center">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
       </div>
     </div>
   );
@@ -940,7 +950,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <select
           value={day}
           onChange={(e) => setDay(e.target.value as any)}
@@ -970,14 +980,6 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
-
-        <button
-          onClick={handleCreate}
-          disabled={!time || !selectedService || !customerName || !customerPhone || !slotAvailable}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          Crear Sobreturno
-        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1025,14 +1027,23 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
         </button>
       </div>
     ))}
-    <button
-      type="button"
-      onClick={() => { if (additionalNames.length < 2) setAdditionalNames([...additionalNames, '']); }}
-      disabled={additionalNames.length >= 2}
-      className={`px-3 py-2 rounded-lg text-sm ${additionalNames.length < 2 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}
-    >
-      + Agregar acompañante
-    </button>
+    <div className="flex items-center justify-center gap-3">
+      <button
+        type="button"
+        onClick={() => { if (additionalNames.length < 2) setAdditionalNames([...additionalNames, '']); }}
+        disabled={additionalNames.length >= 2}
+        className={`px-3 py-2 rounded-lg text-sm ${additionalNames.length < 2 ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-700 text-gray-400 cursor-not-allowed'}`}
+      >
+        + Agregar acompañante
+      </button>
+      <button
+        onClick={handleCreate}
+        disabled={!time || !selectedService || !customerName || !customerPhone || !slotAvailable}
+        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
+      >
+        Crear Sobreturno
+      </button>
+    </div>
   </div>
 
       {!slotAvailable && time && (
