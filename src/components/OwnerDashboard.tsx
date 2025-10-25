@@ -21,9 +21,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   onUpdateAppointment,
   onNewAppointment
 }) => {
+  const SHOW_STATUS = false;
   const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings'>('appointments');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'confirmed' | 'completed' | 'cancelled'>('all');
+  const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ 
     customerName: '', 
@@ -46,34 +48,105 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return () => clearTimeout(timeoutId);
   }, []);
   const filteredAppointments = appointments.filter(apt => {
-    const matchesStatus = filterStatus === 'all' || apt.status === filterStatus;
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const isFri = !!d && d.getDay() === 5;
+    const isSat = !!d && d.getDay() === 6;
+    const isSobreturno = apt.time.endsWith(':30');
+    const matchesDay =
+      dayFilter === 'all' ||
+      (dayFilter === 'friday' && isFri) ||
+      (dayFilter === 'saturday' && isSat) ||
+      (dayFilter === 'sobreturno' && isSobreturno);
     const companions = (apt.additionalCustomerNames || []).join(' ').toLowerCase();
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       apt.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       companions.includes(searchTerm.toLowerCase()) ||
       apt.customerPhone.includes(searchTerm);
-    return matchesStatus && matchesSearch;
+    return matchesDay && matchesSearch;
   });
 
   const confirmedAppointments = filteredAppointments.filter(apt => apt.status === 'confirmed');
+  // Helper para comparar fecha y hora en formato de turno
+  // Función para parsear la fecha ("viernes 14 de junio") + time --> Date
+  function parseAppointmentDateTime(dateLabel: string, time: string) {
+    // Formato esperado: "viernes 14 de junio" (sin año)
+    const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const monthName = m[2].toLowerCase();
+    const monthMap: Record<string, number> = {
+      'enero': 0,
+      'febrero': 1,
+      'marzo': 2,
+      'abril': 3,
+      'mayo': 4,
+      'junio': 5,
+      'julio': 6,
+      'agosto': 7,
+      'septiembre': 8,
+      'setiembre': 8, // variante común
+      'octubre': 9,
+      'noviembre': 10,
+      'diciembre': 11
+    };
+    const month = monthMap[monthName];
+    if (month == null) return null;
+    const [hour, minute] = time.split(':').map(Number);
+    const now = new Date();
+    let year = now.getFullYear();
+    let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
+    // Heurística: si la fecha candidata está más de 7 días en el pasado, asumimos que corresponde al próximo año
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    if (candidate.getTime() < now.getTime() - sevenDays) {
+      candidate = new Date(year + 1, month, day, hour || 0, minute || 0, 0, 0);
+    }
+    return candidate;
+  }
+ 
+  function appointmentCompare(a: Appointment, b: Appointment, dir: 'asc' | 'desc') {
+    const da = parseAppointmentDateTime(a.date, a.time);
+    const db = parseAppointmentDateTime(b.date, b.time);
+    if (!da || !db) return 0;
+    const now = new Date();
+    const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+    const aIsToday = isSameDay(da, now);
+    const bIsToday = isSameDay(db, now);
+    if (aIsToday !== bIsToday) return aIsToday ? -1 : 1; // Hoy primero
+    // Si ambos son hoy, ordenar: futuros primero, luego pasados; dentro aplicar dir
+    if (aIsToday && bIsToday) {
+      const aPast = da.getTime() < now.getTime();
+      const bPast = db.getTime() < now.getTime();
+      if (aPast !== bPast) return aPast ? 1 : -1; // futuros primero
+      const diffToday = da.getTime() - db.getTime();
+      return dir === 'asc' ? diffToday : -diffToday;
+    }
+    // Ninguno es hoy: mantener prioridad de futuros sobre pasados
+    const aPast = da.getTime() < now.getTime();
+    const bPast = db.getTime() < now.getTime();
+    if (aPast !== bPast) return aPast ? 1 : -1;
+    // Ambos no son hoy y están en el mismo grupo; ordenar por fecha completa según dir
+    const diff = da.getTime() - db.getTime();
+    return dir === 'asc' ? diff : -diff;
+  }
+
   const todayAppointments = confirmedAppointments.filter(apt => {
-    const today = new Date().toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    return apt.date === today;
-  });
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    if (!d) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  }).sort((a, b) => appointmentCompare(a, b, sortDir));
 
   const upcomingAppointments = confirmedAppointments.filter(apt => {
-    const today = new Date().toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-    return apt.date !== today;
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    if (!d) return true;
+    const now = new Date();
+    return !(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
+  });
+
+  // Turnos realmente futuros (desde ahora): incluye los que faltan hoy y los de días siguientes
+  const futureAppointments = confirmedAppointments.filter(apt => {
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    return !!d && d.getTime() > Date.now();
   });
 
   const handleEditStart = (appointment: Appointment) => {
@@ -156,24 +229,37 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const renderAppointmentCard = (appointment: Appointment, isToday: boolean) => (
     (() => {
       const isSobreturno = appointment.time.endsWith(':30');
-      const borderClass = isSobreturno
+      const d = parseAppointmentDateTime(appointment.date, appointment.time);
+      const dayIdx = d ? d.getDay() : 6; // 5=viernes, 6=sábado
+      // Mapeo de colores por día: viernes -> azul, sábado -> violeta
+      const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
+      const now = new Date();
+      const isPast = !!d && d.getTime() < now.getTime();
+      const borderClass = theme === 'orange'
         ? 'border-l-orange-500'
-        : isToday
-          ? 'border-l-green-500'
-          : 'border-l-purple-500';
+        : theme === 'blue'
+          ? (isPast ? 'border-l-blue-700' : 'border-l-blue-500')
+          : (isPast ? 'border-l-purple-700' : 'border-l-purple-500');
+      const bgBorderClass = theme === 'orange'
+        ? 'bg-orange-500/20 border border-orange-500/30'
+        : theme === 'blue'
+          ? (isPast ? 'bg-blue-700/20 border border-blue-700/40' : 'bg-blue-500/20 border border-blue-500/30')
+          : (isPast ? 'bg-purple-700/20 border border-purple-700/40' : 'bg-purple-500/20 border border-purple-500/30');
+      const dateTextColor = theme === 'orange'
+        ? 'text-orange-300'
+        : theme === 'blue'
+          ? (isPast ? 'text-blue-400' : 'text-blue-300')
+          : (isPast ? 'text-purple-400' : 'text-purple-300');
+      const themeChipClass = theme === 'orange' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : theme === 'blue' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
       return (
     <div key={appointment.id} className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center space-x-3">
-          <div className={`rounded-full p-2 ${
-            isSobreturno ? 'bg-orange-500/20 border border-orange-500/30' : (isToday ? 'bg-green-500/20 border border-green-500/30' : 'bg-purple-500/20 border border-purple-500/30')
-          }`}>
+          <div className={`rounded-full p-2 ${bgBorderClass} ${isPast ? 'opacity-60' : ''}`}>
             <span className="text-lg">{appointment.service.icon}</span>
           </div>
           <div>
-            <p className={`font-semibold ${
-              isSobreturno ? 'text-orange-300' : (isToday ? 'text-green-300' : 'text-purple-300')
-            }`}>
+            <p className={`font-semibold ${dateTextColor}`}>
               {appointment.date}
             </p>
             <div className="flex items-center space-x-2 text-gray-400">
@@ -184,16 +270,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           </div>
         </div>
         <div className={isSobreturno ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
-          <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-            appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-            appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-            appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-            'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-          }`}>
-            {appointment.status === 'confirmed' ? 'Confirmado' :
-             appointment.status === 'completed' ? 'Completado' :
-             appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
-          </div>
+          {SHOW_STATUS && (
+            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+              appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+              appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+              appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+              'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+            }`}>
+              {appointment.status === 'confirmed' ? 'Confirmado' :
+               appointment.status === 'completed' ? 'Completado' :
+               appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
+            </div>
+          )}
           {isSobreturno && (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">SOBRETURNO</span>
           )}
@@ -340,17 +428,21 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           <div className="pt-3 border-t border-gray-700">
             <div className="flex flex-col space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">Estado:</label>
-                <select
-                  value={appointment.status}
-                  onChange={(e) => handleStatusChange(appointment.id, e.target.value as Appointment['status'])}
-                  className="text-sm bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
-                >
-                  <option value="confirmed">Confirmado</option>
-                  <option value="completed">Completado</option>
-                  <option value="cancelled">Cancelado</option>
-                  <option value="no-show">No mostrar</option>
-                </select>
+                {SHOW_STATUS && (
+                  <>
+                    <label className="text-sm font-medium text-gray-300">Estado:</label>
+                    <select
+                      value={appointment.status}
+                      onChange={(e) => handleStatusChange(appointment.id, e.target.value as Appointment['status'])}
+                      className="text-sm bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 cursor-pointer hover:bg-gray-600 transition-colors duration-200"
+                    >
+                      <option value="confirmed">Confirmado</option>
+                      <option value="completed">Completado</option>
+                      <option value="cancelled">Cancelado</option>
+                      <option value="no-show">No mostrar</option>
+                    </select>
+                  </>
+                )}
               </div>
               
               <div className="flex space-x-2">
@@ -373,10 +465,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           </div>
           
           <div className="pt-2 flex items-center justify-between">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-              isToday ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-            }`}>
-              {isToday ? 'Hoy' : 'Próximo'}
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isPast ? 'bg-gray-600/30 text-gray-300 border border-gray-600' : themeChipClass}`}>
+              {isPast ? 'Pasado' : (isToday ? 'Hoy' : 'Próximo')}
             </span>
             <span className="text-xs text-gray-500">
               {new Date(appointment.createdAt).toLocaleDateString()}
@@ -476,7 +566,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-xs sm:text-sm font-medium">Próximos</p>
-                <p className="text-2xl sm:text-3xl font-bold text-blue-400">{upcomingAppointments.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-400">{futureAppointments.length}</p>
               </div>
               <div className="bg-blue-500/20 border border-blue-500/30 rounded-full p-2 sm:p-3">
                 <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-400" />
@@ -505,16 +595,22 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               <div className="flex items-center space-x-2">
                 <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                 <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  value={dayFilter}
+                  onChange={(e) => setDayFilter(e.target.value as any)}
                   className="bg-gray-700 border border-gray-600 text-white rounded-lg sm:rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-sm sm:text-base"
                 >
-                  <option value="all">Todos los estados</option>
-                  <option value="confirmed">Confirmados</option>
-                  <option value="completed">Completados</option>
-                  <option value="cancelled">Cancelados</option>
-                  <option value="no-show">No mostrar</option>
+                  <option value="all">Todos</option>
+                  <option value="friday">Viernes</option>
+                  <option value="saturday">Sábado</option>
+                  <option value="sobreturno">Sobreturnos</option>
                 </select>
+                <button
+                  onClick={() => setSortDir(prev => prev === 'asc' ? 'desc' : 'asc')}
+                  className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg sm:rounded-xl hover:bg-gray-600 transition-colors text-sm sm:text-base"
+                  title="Alternar orden"
+                >
+                  {sortDir === 'asc' ? 'Próximo → Lejano' : 'Lejano → Próximo'}
+                </button>
               </div>
             </div>
           </div>
@@ -552,9 +648,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              {filteredAppointments.map((appointment) => (
-                renderAppointmentCard(appointment, todayAppointments.some(t => t.id === appointment.id))
-              ))}
+              {filteredAppointments
+                .slice() // copio array para no mutar filteredAppointments original
+                .sort((a, b) => appointmentCompare(a, b, sortDir))
+                .map((appointment) => (
+                  renderAppointmentCard(appointment, todayAppointments.some(t => t.id === appointment.id))
+                ))}
             </div>
           </div>
         )}
@@ -567,10 +666,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                 <Calendar className="h-8 w-8 sm:h-10 sm:w-10 text-gray-500" />
               </div>
               <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
-                {searchTerm || filterStatus !== 'all' ? 'No se encontraron resultados' : 'No hay reservas aún'}
+                {searchTerm || dayFilter !== 'all' ? 'No se encontraron resultados' : 'No hay reservas aún'}
               </h3>
               <p className="text-sm sm:text-base text-gray-400">
-                {searchTerm || filterStatus !== 'all' ? 'Intenta cambiar los filtros de búsqueda' : 'Las nuevas reservas aparecerán aquí automáticamente'}
+                {searchTerm || dayFilter !== 'all' ? 'Intenta cambiar los filtros de búsqueda' : 'Las nuevas reservas aparecerán aquí automáticamente'}
               </p>
             </div>
           </div>
