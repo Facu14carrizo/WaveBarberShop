@@ -1025,7 +1025,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
         />
         <input
           type="tel"
-          placeholder="Teléfono del cliente"
+          placeholder="Ej: 11 1234-5678"
           value={customerPhone}
           onChange={(e) => setCustomerPhone(e.target.value)}
           className="px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"

@@ -10,6 +10,7 @@ import { Appointment } from './types';
 import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
 import { sendToZapier, scheduleReminders } from './utils/webhooks';
+import './utils/testWhatsApp'; // Funciones de prueba para WhatsApp
 
 function App() {
   const [view, setView] = useState<'customer' | 'owner'>('customer');

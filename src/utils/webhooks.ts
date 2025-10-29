@@ -1,5 +1,5 @@
-// Utilidad para enviar datos a Zapier webhooks
-// Esto permitirá que Zapier detecte cuando se crean/modifican turnos
+// Utilidad para enviar datos a Make.com webhooks
+// Esto permitirá que Make.com detecte cuando se crean/modifican turnos
 
 export interface AppointmentWebhookData {
   id: string;
@@ -20,86 +20,48 @@ export interface AppointmentWebhookData {
   notes?: string;
 }
 
-// URLs de webhooks de Zapier (las configurarás en Zapier)
-const ZAPIER_WEBHOOKS = {
-  // Webhook para confirmación inmediata
-  CONFIRMATION: 'https://hooks.zapier.com/hooks/catch/15043194/u53i8bt/',
-  // Webhook para recordatorio 24h antes
-  REMINDER_24H: 'TU_WEBHOOK_AQUI_RECORDATORIO_24H',
-  // Webhook para recordatorio el día del turno
-  REMINDER_DAY: 'TU_WEBHOOK_AQUI_RECORDATORIO_DIA'
-};
+// URL del webhook de Make.com
+const MAKE_WEBHOOK_URL = 'https://hook.us1.make.com/cnc77ml1ija6o1nxx6y1vcsbciwbcwbk';
 
-// Función para enviar datos en el formato específico que necesita Zapier
-export const sendToZapier = async (
-  webhookType: 'CONFIRMATION' | 'REMINDER_24H' | 'REMINDER_DAY',
+// Función para enviar datos a Make.com
+export const sendToMake = async (
   appointmentData: AppointmentWebhookData
 ): Promise<boolean> => {
-  const webhookUrl = ZAPIER_WEBHOOKS[webhookType];
-  
-  if (!webhookUrl || webhookUrl.includes('TU_WEBHOOK_AQUI')) {
-    console.log('Webhook no configurado:', webhookType);
-    return false;
-  }
-
-  // Formatear los datos exactamente como los necesita Zapier
-  const webhookData = {
-    customerPhone: appointmentData.customerPhone,
-    customerName: appointmentData.customerName,
-    date: appointmentData.date,
-    time: appointmentData.time,
-    service: {
-      name: appointmentData.service.name,
-      price: appointmentData.service.price
-    }
-  };
-
   try {
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Importar las funciones de recordatorios
+    const { sendScheduledReminders, normalizePhoneForWhatsApp } = await import('./whatsappReminders');
+    
+    // Normalizar el teléfono para WhatsApp
+    const normalizedPhone = normalizePhoneForWhatsApp(appointmentData.customerPhone);
+    
+    // Enviar recordatorios programados
+    await sendScheduledReminders({
+      customerName: appointmentData.customerName,
+      customerPhone: normalizedPhone,
+      service: {
+        name: appointmentData.service.name,
+        price: appointmentData.service.price
       },
-      body: JSON.stringify(webhookData),
+      date: appointmentData.date,
+      time: appointmentData.time
     });
 
-    if (response.ok) {
-      console.log('Datos enviados a Zapier exitosamente:', webhookType, webhookData);
-      return true;
-    } else {
-      console.error('Error al enviar a Zapier:', response.status);
-      return false;
-    }
+    console.log('✅ Recordatorios programados en Make.com exitosamente');
+    return true;
   } catch (error) {
-    console.error('Error de red al enviar a Zapier:', error);
+    console.error('❌ Error al enviar a Make.com:', error);
     return false;
   }
 };
 
-// Función para programar recordatorios
-export const scheduleReminders = (appointment: AppointmentWebhookData) => {
-  const appointmentDate = new Date(`${appointment.date} ${appointment.time}`);
-  const now = new Date();
-  
-  // Recordatorio 24 horas antes
-  const reminder24h = new Date(appointmentDate.getTime() - 24 * 60 * 60 * 1000);
-  
-  // Recordatorio el día del turno (2 horas antes)
-  const reminderDay = new Date(appointmentDate.getTime() - 2 * 60 * 60 * 1000);
-  
-  // Programar recordatorio 24h antes
-  if (reminder24h > now) {
-    const timeUntilReminder24h = reminder24h.getTime() - now.getTime();
-    setTimeout(() => {
-      sendToZapier('REMINDER_24H', appointment);
-    }, timeUntilReminder24h);
-  }
-  
-  // Programar recordatorio el día
-  if (reminderDay > now) {
-    const timeUntilReminderDay = reminderDay.getTime() - now.getTime();
-    setTimeout(() => {
-      sendToZapier('REMINDER_DAY', appointment);
-    }, timeUntilReminderDay);
+// Función de compatibilidad (mantiene la API existente)
+export const sendToZapier = sendToMake;
+
+// Función para programar recordatorios (ahora usa Make.com)
+export const scheduleReminders = async (appointment: AppointmentWebhookData) => {
+  try {
+    await sendToMake(appointment);
+  } catch (error) {
+    console.error('Error programando recordatorios:', error);
   }
 };

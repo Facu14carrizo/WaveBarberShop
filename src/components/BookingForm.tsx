@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, User, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Appointment, Service } from '../types';
-import { scheduleWhatsAppReminders } from '../utils/whatsappReminders';
+// Los recordatorios se manejan automáticamente en App.tsx
 
 interface BookingFormProps {
   selectedDate: string;
@@ -44,22 +44,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
       reminderSent: false
     };
 
-    // Programar recordatorios de WhatsApp automáticamente
-    try {
-      await scheduleWhatsAppReminders(
-        `temp-${Date.now()}`, // ID temporal hasta que se guarde en la DB
-        customerName,
-        customerPhone,
-        selectedService.name,
-        selectedService.price,
-        selectedDate,
-        selectedTime
-      );
-      console.log('✅ Recordatorios de WhatsApp programados');
-    } catch (error) {
-      console.error('❌ Error al programar recordatorios:', error);
-      // No bloqueamos la reserva si falla el envío de recordatorios
-    }
+    // Los recordatorios se programan automáticamente en App.tsx
 
     onBookingComplete(appointment);
     setShowConfirmation(true);
@@ -211,7 +196,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
-                  placeholder="Ej: +54 9 11 1234-5678"
+                  placeholder="Ej: 11 1234-5678"
                   required
                 />
               </div>
