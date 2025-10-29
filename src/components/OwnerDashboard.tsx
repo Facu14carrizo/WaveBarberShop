@@ -129,18 +129,32 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return dir === 'asc' ? diff : -diff;
   }
 
+  // Todos los turnos pasados (de cualquier día)
+  const pastAppointments = confirmedAppointments.filter(apt => {
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    return !!d && d.getTime() < Date.now();
+  }).sort((a, b) => appointmentCompare(a, b, sortDir));
+
+  // Turnos de hoy separados en pasados y futuros
   const todayAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     if (!d) return false;
     const now = new Date();
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  });
+
+
+  const todayFutureAppointments = todayAppointments.filter(apt => {
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    return !!d && d.getTime() >= Date.now();
   }).sort((a, b) => appointmentCompare(a, b, sortDir));
 
+  // Turnos futuros (no de hoy)
   const upcomingAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
-    if (!d) return true;
+    if (!d) return false;
     const now = new Date();
-    return !(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
+    return d.getTime() > Date.now() && !(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
   });
 
   // Turnos realmente futuros (desde ahora): incluye los que faltan hoy y los de días siguientes
@@ -616,14 +630,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           </div>
         </div>
 
-        {/* Today's Appointments */}
-        {todayAppointments.length > 0 && (
+        {/* Today's Future Appointments */}
+        {todayFutureAppointments.length > 0 && (
           <div className="mb-6 sm:mb-8 md:mb-12">
-            <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
-              Turnos de Hoy
+            <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 flex items-center">
+              <Calendar className="h-5 w-5 mr-2" />
+              Turnos Restantes de Hoy ({todayFutureAppointments.length})
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              {todayAppointments.map((appointment) => (
+              {todayFutureAppointments.map((appointment) => (
                 renderAppointmentCard(appointment, true)
               ))}
             </div>
@@ -631,11 +646,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         )}
 
         {/* Upcoming Appointments */}
-        {filteredAppointments.filter(apt => apt.status !== 'cancelled').length > todayAppointments.length && (
-          <div>
+        {upcomingAppointments.length > 0 && (
+          <div className="mb-6 sm:mb-8 md:mb-12">
             <div className="flex items-center justify-between mb-4 sm:mb-6">
-              <h3 className="text-xl sm:text-2xl font-bold text-white">
-                Todas las Reservas ({filteredAppointments.length})
+              <h3 className="text-xl sm:text-2xl font-bold text-white flex items-center">
+                <Calendar className="h-5 w-5 mr-2" />
+                Próximos Turnos ({upcomingAppointments.length})
               </h3>
               <button
                 onClick={handleUndo}
@@ -648,18 +664,35 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
-              {filteredAppointments
-                .slice() // copio array para no mutar filteredAppointments original
+              {upcomingAppointments
+                .slice() // copio array para no mutar upcomingAppointments original
                 .sort((a, b) => appointmentCompare(a, b, sortDir))
                 .map((appointment) => (
-                  renderAppointmentCard(appointment, todayAppointments.some(t => t.id === appointment.id))
+                  renderAppointmentCard(appointment, false)
                 ))}
             </div>
           </div>
         )}
 
+        {/* All Past Appointments */}
+        {pastAppointments.length > 0 && (
+          <div className="mb-6 sm:mb-8 md:mb-12">
+            <h3 className="text-xl sm:text-2xl font-bold text-gray-400 mb-4 sm:mb-6 flex items-center">
+              <Clock className="h-5 w-5 mr-2" />
+              Turnos Pasados ({pastAppointments.length})
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+              {pastAppointments.map((appointment) => (
+                <div key={appointment.id} className="opacity-75">
+                  {renderAppointmentCard(appointment, todayAppointments.some(t => t.id === appointment.id))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Empty State */}
-        {filteredAppointments.length === 0 && (
+        {pastAppointments.length === 0 && todayFutureAppointments.length === 0 && upcomingAppointments.length === 0 && (
           <div className="text-center py-8 sm:py-12 md:py-16">
             <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12 shadow-lg max-w-md mx-auto">
               <div className="bg-gray-700 border border-gray-600 rounded-full w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center mx-auto mb-4 sm:mb-6">

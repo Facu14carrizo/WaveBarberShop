@@ -12,7 +12,7 @@ interface PinAuthModalProps {
 export const PinAuthModal: React.FC<PinAuthModalProps> = ({ 
   onSuccess, 
   onCancel, 
-  pin = '1414',
+  pin = '7294',
   title = 'Acceso al Dashboard',
   subtitle = 'Ingresa el PIN de 4 dígitos para continuar'
 }) => {
