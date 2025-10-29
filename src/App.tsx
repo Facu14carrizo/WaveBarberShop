@@ -85,10 +85,7 @@ function App() {
       };
       const newAppointment = await addAppointment(appointmentWithId);
       
-      // Enviar confirmación inmediata a Zapier
-      sendToZapier('CONFIRMATION', newAppointment);
-      
-      // Programar recordatorios automáticos
+      // Programar recordatorios automáticos (incluye confirmación inmediata)
       scheduleReminders(newAppointment);
       
       addNotification({
