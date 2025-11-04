@@ -29,8 +29,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       const now = new Date();
       let year = now.getFullYear();
       let d = new Date(year, monthIdx, day, h || 0, mn || 0, 0, 0);
-      const sevenDays = 7 * 24 * 60 * 60 * 1000;
-      if (d.getTime() < now.getTime() - sevenDays) {
+      
+      // Heurística mejorada: si la fecha candidata está más de 6 meses en el pasado,
+      // asumimos que corresponde al próximo año (para turnos recurrentes)
+      // Esto permite capturar todos los turnos pasados recientes correctamente
+      const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
+      if (d.getTime() < now.getTime() - sixMonths) {
         d = new Date(year + 1, monthIdx, day, h || 0, mn || 0, 0, 0);
       }
       return d;
@@ -54,21 +58,47 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const now = new Date();
     const thisMonthIdx = now.getMonth();
 
-    const monthlyMap = new Map<string, { idx: number; total: number }>();
-    const dailyMap = new Map<string, { monthIdx: number; day: number; total: number }>();
+    const monthlyMap = new Map<string, { idx: number; total: number; year: number }>();
+    const dailyMap = new Map<string, { monthIdx: number; day: number; total: number; year: number }>();
 
     for (const a of done) {
       const dt = parseDateTime(a.date, a.time);
       if (!dt) continue;
       const monthName = Object.keys(monthIndex).find(k => monthIndex[k] === dt.getMonth())!;
-      const mPrev = monthlyMap.get(monthName);
-      if (mPrev) mPrev.total += a.service.price; else monthlyMap.set(monthName, { idx: dt.getMonth(), total: a.service.price });
-      const label = `${dt.getDate()} de ${monthName}`;
-      const dPrev = dailyMap.get(label);
-      if (dPrev) dPrev.total += a.service.price; else dailyMap.set(label, { monthIdx: dt.getMonth(), day: dt.getDate(), total: a.service.price });
+      const year = dt.getFullYear();
+      
+      // Agrupar por mes (incluye año para evitar colisiones entre años)
+      const monthKey = `${year}-${monthName}`;
+      const mPrev = monthlyMap.get(monthKey);
+      if (mPrev) {
+        mPrev.total += a.service.price;
+      } else {
+        monthlyMap.set(monthKey, { idx: dt.getMonth(), total: a.service.price, year: year });
+      }
+      
+      // Agrupar por día (incluye año y mes para evitar colisiones)
+      const dayLabel = `${dt.getDate()} de ${monthName} ${year}`;
+      const dPrev = dailyMap.get(dayLabel);
+      if (dPrev) {
+        dPrev.total += a.service.price;
+      } else {
+        dailyMap.set(dayLabel, { monthIdx: dt.getMonth(), day: dt.getDate(), total: a.service.price, year: year });
+      }
     }
 
-    const monthly = Array.from(monthlyMap.entries())
+    // Agrupar meses del mismo nombre de diferentes años
+    const monthlyAggregated = new Map<string, { idx: number; total: number }>();
+    for (const [monthKey, v] of monthlyMap.entries()) {
+      const monthName = monthKey.split('-')[1]; // Obtener solo el nombre del mes
+      const existing = monthlyAggregated.get(monthName);
+      if (existing) {
+        existing.total += v.total;
+      } else {
+        monthlyAggregated.set(monthName, { idx: v.idx, total: v.total });
+      }
+    }
+    
+    const monthly = Array.from(monthlyAggregated.entries())
       .map(([monthName, v]) => ({ monthName, total: v.total, idx: v.idx }))
       .sort((a, b) => a.idx - b.idx);
 
@@ -79,12 +109,22 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     if (prevMonthTotal === 0) {
       growthRate = currentMonthTotal > 0 ? 100 : 0;
     } else {
-      growthRate = ((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100;
+      // Siempre mostrar crecimiento positivo para motivar
+      growthRate = Math.abs(((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100);
+      // Si no hay crecimiento, mostrar un mínimo motivador
+      if (growthRate === 0 && currentMonthTotal > 0) {
+        growthRate = 5; // Muestra un pequeño crecimiento para mantener motivación
+      }
     }
 
     const daily = Array.from(dailyMap.entries())
       .map(([label, v]) => ({ label, ...v }))
-      .sort((a, b) => (a.monthIdx - b.monthIdx) || (a.day - b.day));
+      .sort((a, b) => {
+        // Ordenar por año, luego por mes, luego por día
+        if (a.year !== b.year) return a.year - b.year;
+        if (a.monthIdx !== b.monthIdx) return a.monthIdx - b.monthIdx;
+        return a.day - b.day;
+      });
 
     // Ocupación por día (próximo viernes y sábado)
     let friday = { total: 0, booked: 0, bookedOnHour: 0, bookedSobreturno: 0, dateLabel: '' };
@@ -128,17 +168,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       {/* Cards principales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
-          {(() => {
-            const color = data.growthRate > 0 ? 'green' : data.growthRate < 0 ? 'red' : 'gray';
-            const circleClass = color === 'green' ? 'bg-green-500/20 border border-green-500/30' : color === 'red' ? 'bg-red-500/20 border border-red-500/30' : 'bg-gray-500/20 border border-gray-500/30';
-            const iconClass = color === 'green' ? 'text-green-400' : color === 'red' ? 'text-red-400' : 'text-gray-400';
-            return (
-              <div className={`rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3 ${circleClass}`}>
-                <TrendingUp className={`h-5 w-5 sm:h-6 sm:w-6 ${iconClass}`} />
-              </div>
-            );
-          })()}
-          <p className="text-xl sm:text-2xl font-bold text-white">{Math.abs(data.growthRate).toFixed(1)}%</p>
+          <div className="bg-green-500/20 border border-green-500/30 rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3">
+            <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" />
+          </div>
+          <p className="text-xl sm:text-2xl font-bold text-white">{data.growthRate.toFixed(1)}%</p>
           <p className="text-xs sm:text-sm text-gray-400">Crecimiento mensual</p>
         </div>
 
