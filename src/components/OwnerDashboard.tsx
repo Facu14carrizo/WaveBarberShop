@@ -95,9 +95,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     const now = new Date();
     let year = now.getFullYear();
     let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
-    // Heurística: si la fecha candidata está más de 7 días en el pasado, asumimos que corresponde al próximo año
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    if (candidate.getTime() < now.getTime() - sevenDays) {
+    
+    // Heurística mejorada: si la fecha candidata está más de 6 meses en el pasado, 
+    // asumimos que corresponde al próximo año (para turnos recurrentes)
+    const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
+    if (candidate.getTime() < now.getTime() - sixMonths) {
       candidate = new Date(year + 1, month, day, hour || 0, minute || 0, 0, 0);
     }
     return candidate;
@@ -129,10 +131,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return dir === 'asc' ? diff : -diff;
   }
 
-  // Todos los turnos pasados (de cualquier día)
+  // Todos los turnos pasados (excluyendo los de hoy que ya están separados)
   const pastAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
-    return !!d && d.getTime() < Date.now();
+    if (!d) return false;
+    const now = new Date();
+    const isToday = d.getFullYear() === now.getFullYear() && 
+                    d.getMonth() === now.getMonth() && 
+                    d.getDate() === now.getDate();
+    // Incluir solo turnos pasados que NO sean de hoy
+    return d.getTime() < Date.now() && !isToday;
   }).sort((a, b) => appointmentCompare(a, b, sortDir));
 
   // Turnos de hoy separados en pasados y futuros
@@ -149,12 +157,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return !!d && d.getTime() >= Date.now();
   }).sort((a, b) => appointmentCompare(a, b, sortDir));
 
-  // Turnos futuros (no de hoy)
+  // Turnos futuros (no de hoy, y que no sean pasados)
   const upcomingAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     if (!d) return false;
     const now = new Date();
-    return d.getTime() > Date.now() && !(d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate());
+    const isToday = d.getFullYear() === now.getFullYear() && 
+                    d.getMonth() === now.getMonth() && 
+                    d.getDate() === now.getDate();
+    // Solo incluir turnos que sean futuros (después de ahora) y que NO sean de hoy
+    return d.getTime() > Date.now() && !isToday;
   });
 
   // Turnos realmente futuros (desde ahora): incluye los que faltan hoy y los de días siguientes
