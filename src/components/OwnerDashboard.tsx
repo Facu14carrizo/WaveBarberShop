@@ -132,6 +132,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   }
 
   // Todos los turnos pasados (excluyendo los de hoy que ya están separados)
+  // Ordenados: más recientes arriba, más antiguos abajo
   const pastAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     if (!d) return false;
@@ -141,7 +142,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                     d.getDate() === now.getDate();
     // Incluir solo turnos pasados que NO sean de hoy
     return d.getTime() < Date.now() && !isToday;
-  }).sort((a, b) => appointmentCompare(a, b, sortDir));
+  }).sort((a, b) => {
+    const da = parseAppointmentDateTime(a.date, a.time);
+    const db = parseAppointmentDateTime(b.date, b.time);
+    if (!da || !db) return 0;
+    // Orden descendente: más recientes primero (mayor fecha primero)
+    return db.getTime() - da.getTime();
+  });
 
   // Turnos de hoy separados en pasados y futuros
   const todayAppointments = confirmedAppointments.filter(apt => {
