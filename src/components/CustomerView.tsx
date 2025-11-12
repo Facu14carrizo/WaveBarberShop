@@ -6,6 +6,7 @@ import { BookingForm } from './BookingForm';
 import { BackButton } from './BackButton';
 import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges } from '../utils/timeSlots';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
+import { useDayAvailability } from '../hooks/useDayAvailability';
 import { Appointment, Service } from '../types';
 // import { services } from '../data/services';
 import { buildSobreturnoWhatsAppLink } from '../utils/phone';
@@ -24,9 +25,10 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
+  const { availability } = useDayAvailability();
   const [showNoSlotsModal, setShowNoSlotsModal] = useState(false);
 
-  const availableDays = getAvailableDays(ranges as CustomTimeRanges);
+  const availableDays = getAvailableDays(ranges as CustomTimeRanges, availability);
   const currentDay = availableDays.find(day => day.day === selectedDay)!;
   
   const selectedDate = selectedDay === 'friday' 
@@ -173,19 +175,27 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <button
                 key={day.day}
                 onClick={() => {
-                  setSelectedDay(day.day);
-                  setSelectedTime(null);
+                  if (!day.isClosed) {
+                    setSelectedDay(day.day);
+                    setSelectedTime(null);
+                  }
                 }}
+                disabled={day.isClosed}
                 className={`
-                  px-4 sm:px-6 md:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-medium transition-all duration-300 transform active:scale-95 sm:hover:scale-105 w-full sm:w-auto
-                  ${selectedDay === day.day
-                    ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
-                    : 'bg-gray-800 border-2 border-gray-600 hover:border-purple-400 text-gray-200 hover:shadow-md hover:bg-gray-700'
+                  px-4 sm:px-6 md:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-medium transition-all duration-300 transform w-full sm:w-auto
+                  ${day.isClosed
+                    ? 'bg-gray-900 border-2 border-red-600 text-red-400 cursor-not-allowed opacity-60'
+                    : selectedDay === day.day
+                      ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg active:scale-95 sm:hover:scale-105'
+                      : 'bg-gray-800 border-2 border-gray-600 hover:border-purple-400 text-gray-200 hover:shadow-md hover:bg-gray-700 active:scale-95 sm:hover:scale-105'
                   }
                 `}
               >
                 <div className="text-center">
                   <div className="font-bold text-base sm:text-lg">{day.label}</div>
+                  {day.isClosed && (
+                    <div className="text-xs mt-1 text-red-400">Cerrado</div>
+                  )}
                 </div>
               </button>
             ))}
@@ -212,13 +222,23 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
           <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center">
             Horarios disponibles
           </h3>
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl">
-            <TimeSlotGrid
-              slots={availableSlots}
-              onSlotSelect={handleSlotSelect}
-              selectedTime={selectedTime || undefined}
-            />
-          </div>
+          {currentDay.isClosed ? (
+            <div className="bg-gray-800 border-2 border-red-600 rounded-2xl sm:rounded-3xl p-8 sm:p-12 shadow-xl text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h4 className="text-2xl font-bold text-red-400 mb-2">Cerrado</h4>
+              <p className="text-gray-300 text-base">
+                Este día no está disponible para reservas en este momento.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl">
+              <TimeSlotGrid
+                slots={availableSlots}
+                onSlotSelect={handleSlotSelect}
+                selectedTime={selectedTime || undefined}
+              />
+            </div>
+          )}
         </div>
 
         {/* Book Button */}

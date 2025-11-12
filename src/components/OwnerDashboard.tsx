@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
+import { useDayAvailability } from '../hooks/useDayAvailability';
 import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
 import { services } from '../data/services';
 import { Appointment, Service } from '../types';
@@ -759,6 +760,7 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
   const [saturdayEnd, setSaturdayEnd] = useState('');
   const { ranges, addRange, deleteRange, loading } = useSupabaseCustomTimeRanges();
   const { addNotification } = useNotifications();
+  const { availability, updateDayAvailability, loading: availabilityLoading } = useDayAvailability();
 
   const stripWeekday = (s: string) => s.replace(/^[a-záéíóúñ]+\s+/i, '').trim();
   const fridayDateLabel = stripWeekday(formatDate(getNextFriday()));
@@ -779,7 +781,7 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
   };
 
   const getExistingSet = (day: 'friday' | 'saturday') => {
-    const available = getAvailableDays(ranges as CustomTimeRanges);
+    const available = getAvailableDays(ranges as CustomTimeRanges, availability);
     const current = available.find(d => d.day === day);
     return new Set((current?.slots || []).map(s => s.time));
   };
@@ -822,10 +824,79 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
     }
   };
 
+  const handleToggleDay = async (day: 'friday' | 'saturday', enabled: boolean) => {
+    try {
+      await updateDayAvailability(day, enabled);
+      addNotification({
+        type: 'success',
+        title: 'Actualizado',
+        message: `${day === 'friday' ? 'Viernes' : 'Sábado'} ${enabled ? 'activado' : 'desactivado'} correctamente`
+      });
+    } catch (e) {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: e instanceof Error ? e.message : 'No se pudo actualizar la disponibilidad'
+      });
+    }
+  };
+
   return (
     <div className="mb-6 sm:mb-8 md:mb-12 space-y-6">
       <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 text-center">Configuraciones</h3>
       <p className="text-gray-400 text-sm text-center">Los rangos se guardan en el servidor y se sincronizan en tiempo real. Ya están disponibles para todos los clientes.</p>
+
+      {/* Switches para activar/desactivar días */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+        <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+          <Calendar className="h-4 w-4 text-purple-300 mr-2" />
+          Disponibilidad de días
+        </h4>
+        <p className="text-gray-400 text-sm text-center mb-4">
+          Activa o desactiva los días de atención. Los días desactivados aparecerán como cerrados para los clientes.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Switch Viernes */}
+          <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
+            <div>
+              <p className="font-medium text-white">Viernes</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {availability.friday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={availability.friday}
+                onChange={(e) => handleToggleDay('friday', e.target.checked)}
+                disabled={availabilityLoading}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+
+          {/* Switch Sábado */}
+          <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
+            <div>
+              <p className="font-medium text-white">Sábado</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {availability.saturday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={availability.saturday}
+                onChange={(e) => handleToggleDay('saturday', e.target.checked)}
+                disabled={availabilityLoading}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+            </label>
+          </div>
+        </div>
+      </div>
 
       {/* Añadir horarios adicionales + Rangos actuales en layout lado a lado */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -951,6 +1022,7 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
           appointments={appointments}
           onNewAppointment={onNewAppointment}
           ranges={ranges as CustomTimeRanges}
+          availability={availability}
         />
         <p className="text-xs text-gray-400 mt-2 text-center">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
       </div>
@@ -962,8 +1034,9 @@ interface SobreturnoFormProps {
   appointments: Appointment[];
   onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
   ranges: CustomTimeRanges;
+  availability: { friday: boolean; saturday: boolean };
 }
-function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFormProps) {
+function SobreturnoForm({ appointments, onNewAppointment, ranges, availability }: SobreturnoFormProps) {
   const [day, setDay] = useState<'friday' | 'saturday'>('friday');
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [time, setTime] = useState('');
@@ -986,7 +1059,7 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges }: SobreturnoFo
     return h * 60 + (m || 0);
   };
 
-  const availableDays = getAvailableDays(ranges);
+  const availableDays = getAvailableDays(ranges, availability);
   const selectedDate = day === 'friday' ? formatDate(getNextFriday()) : formatDate(getNextSaturday());
   const existingSet = new Set(
     availableDays.find(d => d.day === day)?.slots.map(s => s.time) || []

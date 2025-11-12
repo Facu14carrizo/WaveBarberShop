@@ -36,6 +36,7 @@ export interface AvailableDay {
   startTime: string;
   endTime: string;
   slots: TimeSlot[];
+  isClosed?: boolean; // Indica si el día está cerrado/desactivado
 }
 
 export interface BusinessSettings {

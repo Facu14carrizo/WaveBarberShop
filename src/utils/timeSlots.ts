@@ -1,4 +1,5 @@
 import { AvailableDay, TimeSlot, Appointment } from '../types';
+import { DayAvailability } from '../hooks/useDayAvailability';
 
 export type CustomTimeRanges = {
   friday: { start: string; end: string }[];
@@ -73,9 +74,15 @@ export const generateTimeSlots = (startTime: string, endTime: string): string[] 
   return slots;
 };
 
-export const getAvailableDays = (custom?: CustomTimeRanges): AvailableDay[] => [
-  // We'll merge defaults with any custom ranges from localStorage
-  (() => {
+export const getAvailableDays = (
+  custom?: CustomTimeRanges,
+  dayAvailability?: DayAvailability
+): AvailableDay[] => {
+  const availability = dayAvailability || { friday: true, saturday: true };
+  const days: AvailableDay[] = [];
+
+  // Viernes
+  if (availability.friday) {
     const defaultSlots = generateTimeSlots('18:00', '21:00');
     const customRanges = custom || { friday: [], saturday: [] };
     const customSlots = customRanges.friday
@@ -85,15 +92,27 @@ export const getAvailableDays = (custom?: CustomTimeRanges): AvailableDay[] => [
     );
     const startTime = combined.length > 0 ? combined[0] : '18:00';
     const endTime = combined.length > 0 ? combined[combined.length - 1] : '21:00';
-    return {
+    days.push({
       day: 'friday',
       label: 'Viernes',
       startTime,
       endTime,
-      slots: combined.map(time => ({ time, available: true }))
-    } as AvailableDay;
-  })(),
-  (() => {
+      slots: combined.map(time => ({ time, available: true })),
+      isClosed: false
+    } as AvailableDay);
+  } else {
+    days.push({
+      day: 'friday',
+      label: 'Viernes',
+      startTime: '00:00',
+      endTime: '00:00',
+      slots: [],
+      isClosed: true
+    } as AvailableDay);
+  }
+
+  // Sábado
+  if (availability.saturday) {
     const defaultSlots = generateTimeSlots('14:00', '21:00');
     const customRanges = custom || { friday: [], saturday: [] };
     const customSlots = customRanges.saturday
@@ -103,15 +122,27 @@ export const getAvailableDays = (custom?: CustomTimeRanges): AvailableDay[] => [
     );
     const startTime = combined.length > 0 ? combined[0] : '14:00';
     const endTime = combined.length > 0 ? combined[combined.length - 1] : '21:00';
-    return {
+    days.push({
       day: 'saturday',
       label: 'Sábado',
       startTime,
       endTime,
-      slots: combined.map(time => ({ time, available: true }))
-    } as AvailableDay;
-  })()
-];
+      slots: combined.map(time => ({ time, available: true })),
+      isClosed: false
+    } as AvailableDay);
+  } else {
+    days.push({
+      day: 'saturday',
+      label: 'Sábado',
+      startTime: '00:00',
+      endTime: '00:00',
+      slots: [],
+      isClosed: true
+    } as AvailableDay);
+  }
+
+  return days;
+};
 
 export const formatDate = (date: Date): string => {
   const weekdays = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
