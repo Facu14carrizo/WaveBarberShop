@@ -4,7 +4,7 @@ import { Volume2, VolumeX, Music } from 'lucide-react';
 export const BackgroundMusic: React.FC = () => {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true); // Muteado por defecto
   const [showControls, setShowControls] = useState(false);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
@@ -16,7 +16,7 @@ export const BackgroundMusic: React.FC = () => {
     audio.volume = 0.3; // Volumen moderado (30%)
     audio.loop = true; // Repetir automáticamente
     audio.preload = 'auto'; // Precargar el audio
-    audio.muted = false; // Asegurar que no esté silenciado
+    audio.muted = true; // Muteado por defecto
     
     // Sincronizar el estado inicial
     setIsMuted(audio.muted);
@@ -24,9 +24,9 @@ export const BackgroundMusic: React.FC = () => {
     // Función para intentar reproducir
     const attemptPlay = async () => {
       try {
-        // Para iOS, necesitamos asegurar que el audio no esté silenciado
-        audio.muted = false;
+        // Mantener el estado muteado (no desmutear automáticamente)
         audio.volume = 0.3;
+        // No cambiar audio.muted aquí, mantener el estado actual (muteado por defecto)
         
         await audio.play();
         setIsPlaying(true);
@@ -169,9 +169,9 @@ export const BackgroundMusic: React.FC = () => {
     if (!audio) return;
 
     try {
-      // Para iOS, asegurar configuración correcta antes de reproducir
-      audio.muted = false;
+      // Mantener el estado muteado (no desmutear automáticamente)
       audio.volume = 0.3;
+      // No cambiar audio.muted aquí, mantener el estado actual (muteado por defecto)
       
       await audio.play();
       setIsPlaying(true);
@@ -181,8 +181,9 @@ export const BackgroundMusic: React.FC = () => {
       // En caso de error, intentar una vez más después de un breve delay
       setTimeout(async () => {
         try {
-          audio.muted = false;
+          // Mantener el estado muteado
           audio.volume = 0.3;
+          // No cambiar audio.muted aquí
           await audio.play();
           setIsPlaying(true);
           setAutoplayBlocked(false);
@@ -200,11 +201,12 @@ export const BackgroundMusic: React.FC = () => {
         ref={audioRef}
         src="/Smile.mp3"
         preload="auto"
+        muted={true}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onVolumeChange={() => {
           if (audioRef.current) {
-            setIsMuted(audioRef.current.volume === 0);
+            setIsMuted(audioRef.current.muted);
           }
         }}
       />
