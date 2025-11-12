@@ -35,6 +35,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     additionalNames: '' // coma-separado para edición rápida
   });
   const [lastAction, setLastAction] = useState<null | { type: 'delete' | 'update'; snapshot: Appointment }>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -46,6 +47,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     }, 100);
     
     return () => clearTimeout(timeoutId);
+  }, []);
+
+  // Actualizar el tiempo cada 30 segundos para que los turnos pasados se muevan al historial automáticamente
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000); // Actualizar cada 30 segundos para mayor responsividad
+
+    return () => clearInterval(interval);
   }, []);
   const filteredAppointments = appointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
@@ -92,7 +102,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     const month = monthMap[monthName];
     if (month == null) return null;
     const [hour, minute] = time.split(':').map(Number);
-    const now = new Date();
+    const now = currentTime;
     let year = now.getFullYear();
     let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
     
@@ -109,7 +119,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     const da = parseAppointmentDateTime(a.date, a.time);
     const db = parseAppointmentDateTime(b.date, b.time);
     if (!da || !db) return 0;
-    const now = new Date();
+    const now = currentTime;
     const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
     const aIsToday = isSameDay(da, now);
     const bIsToday = isSameDay(db, now);
@@ -131,17 +141,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return dir === 'asc' ? diff : -diff;
   }
 
-  // Todos los turnos pasados (excluyendo los de hoy que ya están separados)
-  // Ordenados: más recientes arriba, más antiguos abajo
-  const pastAppointments = confirmedAppointments.filter(apt => {
+  // Turnos de hoy separados en pasados y futuros
+  const todayAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     if (!d) return false;
-    const now = new Date();
-    const isToday = d.getFullYear() === now.getFullYear() && 
-                    d.getMonth() === now.getMonth() && 
-                    d.getDate() === now.getDate();
-    // Incluir solo turnos pasados que NO sean de hoy
-    return d.getTime() < Date.now() && !isToday;
+    const now = currentTime;
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  });
+
+  // Turnos de hoy que ya pasaron
+  const todayPastAppointments = todayAppointments.filter(apt => {
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    return !!d && d.getTime() < currentTime.getTime();
   }).sort((a, b) => {
     const da = parseAppointmentDateTime(a.date, a.time);
     const db = parseAppointmentDateTime(b.date, b.time);
@@ -150,36 +161,42 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     return db.getTime() - da.getTime();
   });
 
-  // Turnos de hoy separados en pasados y futuros
-  const todayAppointments = confirmedAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
-    if (!d) return false;
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-  });
-
-
   const todayFutureAppointments = todayAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
-    return !!d && d.getTime() >= Date.now();
+    return !!d && d.getTime() >= currentTime.getTime();
   }).sort((a, b) => appointmentCompare(a, b, sortDir));
+
+  // Todos los turnos pasados (incluyendo los de hoy que ya pasaron)
+  // Ordenados: más recientes arriba, más antiguos abajo
+  const pastAppointments = confirmedAppointments.filter(apt => {
+    const d = parseAppointmentDateTime(apt.date, apt.time);
+    if (!d) return false;
+    // Incluir todos los turnos pasados (incluyendo los de hoy)
+    return d.getTime() < currentTime.getTime();
+  }).sort((a, b) => {
+    const da = parseAppointmentDateTime(a.date, a.time);
+    const db = parseAppointmentDateTime(b.date, b.time);
+    if (!da || !db) return 0;
+    // Orden descendente: más recientes primero (mayor fecha primero)
+    return db.getTime() - da.getTime();
+  });
 
   // Turnos futuros (no de hoy, y que no sean pasados)
   const upcomingAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     if (!d) return false;
-    const now = new Date();
+    const now = currentTime;
     const isToday = d.getFullYear() === now.getFullYear() && 
                     d.getMonth() === now.getMonth() && 
                     d.getDate() === now.getDate();
     // Solo incluir turnos que sean futuros (después de ahora) y que NO sean de hoy
-    return d.getTime() > Date.now() && !isToday;
+    return d.getTime() > currentTime.getTime() && !isToday;
   });
 
   // Turnos realmente futuros (desde ahora): incluye los que faltan hoy y los de días siguientes
   const futureAppointments = confirmedAppointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
-    return !!d && d.getTime() > Date.now();
+    return !!d && d.getTime() > currentTime.getTime();
   });
 
   const handleEditStart = (appointment: Appointment) => {
@@ -266,7 +283,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const dayIdx = d ? d.getDay() : 6; // 5=viernes, 6=sábado
       // Mapeo de colores por día: viernes -> azul, sábado -> violeta
       const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
-      const now = new Date();
+      const now = currentTime;
       const isPast = !!d && d.getTime() < now.getTime();
       const borderClass = theme === 'orange'
         ? 'border-l-orange-500'
