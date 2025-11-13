@@ -31,10 +31,12 @@ const convertToAppointment = (row: AppointmentRow): Appointment => {
     customerPhone: row.customer_phone,
     customerEmail: row.customer_email,
     service: {
+      id: '',                         // <-- fix: add default id
       name: row.service_name,
       price: row.service_price,
       duration: row.service_duration,
-      icon: row.service_icon
+      icon: row.service_icon,
+      description: ''                 // <-- fix: add default description
     },
     date: row.date,
     time: row.time,
@@ -55,7 +57,7 @@ const convertToRow = (
     : ''
   const combinedNotes = `${companions}${appointment.notes || ''}`.trim()
   return {
-    id: appointment.id,
+    id: appointment.id ?? '',   // <-- Añadido para evitar error de tipo
     customer_name: appointment.customerName,
     customer_phone: appointment.customerPhone,
     customer_email: appointment.customerEmail,
@@ -190,7 +192,10 @@ export const useSupabaseAppointments = () => {
 
   const addAppointment = async (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const row = convertToRow(appointment)
+      // Asegurar que haya ID
+      const id = (appointment as any).id ?? Math.random().toString(36).substr(2, 9);
+      const withId = { ...appointment, id };
+      const row = convertToRow(withId);
       const { data, error } = await supabase
         .from('appointments')
         .insert([{
