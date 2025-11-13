@@ -3,6 +3,7 @@ import { supabase, CustomTimeRangeRow } from '../lib/supabase'
 import { CustomTimeRanges } from '../utils/timeSlots'
 
 const STORAGE_KEY = 'wbs_custom_time_ranges'
+const LAST_RESET_KEY = 'wbs_last_reset_date'
 
 const readLocal = (): CustomTimeRanges => {
   try {
@@ -24,6 +25,76 @@ const writeLocal = (ranges: CustomTimeRanges) => {
   } catch {}
 }
 
+// Función para verificar si es domingo y si ya se hizo el reset hoy
+const shouldResetRanges = (): boolean => {
+  const today = new Date()
+  const dayOfWeek = today.getDay() // 0 = domingo, 1 = lunes, etc.
+  
+  // Solo resetear si es domingo
+  if (dayOfWeek !== 0) return false
+  
+  // Verificar si ya se hizo el reset hoy
+  try {
+    const lastResetDate = window.localStorage.getItem(LAST_RESET_KEY)
+    if (lastResetDate) {
+      const lastReset = new Date(lastResetDate)
+      const todayStr = today.toDateString()
+      const lastResetStr = lastReset.toDateString()
+      
+      // Si ya se hizo el reset hoy, no resetear de nuevo
+      if (todayStr === lastResetStr) return false
+    }
+  } catch {
+    // Si hay error leyendo, proceder con el reset
+  }
+  
+  return true
+}
+
+// Función para marcar que se hizo el reset hoy
+const markResetDone = () => {
+  try {
+    window.localStorage.setItem(LAST_RESET_KEY, new Date().toISOString())
+  } catch {}
+}
+
+// Función para resetear todos los rangos personalizados
+const resetAllRanges = async (): Promise<void> => {
+  try {
+    // Obtener todos los rangos primero
+    const { data: allRanges, error: fetchError } = await supabase
+      .from('custom_time_ranges')
+      .select('*')
+    
+    if (fetchError) {
+      console.error('Error fetching ranges for reset:', fetchError)
+      return
+    }
+    
+    // Eliminar todos los rangos uno por uno
+    if (allRanges && allRanges.length > 0) {
+      for (const range of allRanges) {
+        const { error: deleteError } = await supabase
+          .from('custom_time_ranges')
+          .delete()
+          .eq('id', range.id)
+        
+        if (deleteError) {
+          console.error(`Error deleting range ${range.id}:`, deleteError)
+        }
+      }
+    }
+    
+    // Limpiar localStorage también
+    writeLocal({ friday: [], saturday: [] })
+    markResetDone()
+    
+    console.log('Rangos personalizados reseteados automáticamente (domingo)')
+  } catch (err) {
+    console.error('Error al resetear rangos:', err)
+  }
+}
+
 export function useSupabaseCustomTimeRanges() {
   const [ranges, setRanges] = useState<CustomTimeRanges>({ friday: [], saturday: [] })
   const [loading, setLoading] = useState(true)
@@ -43,6 +114,12 @@ export function useSupabaseCustomTimeRanges() {
   const loadFromServer = async () => {
     try {
       setLoading(true)
+      
+      // Verificar si es domingo y resetear si es necesario
+      if (shouldResetRanges()) {
+        await resetAllRanges()
+      }
+      
       const { data, error } = await supabase
         .from('custom_time_ranges')
         .select('*')
@@ -64,6 +141,34 @@ export function useSupabaseCustomTimeRanges() {
 
   useEffect(() => {
     loadFromServer()
+  }, [])
+
+  // Verificar periódicamente si es domingo para resetear (por si la app está abierta durante la transición)
+  useEffect(() => {
+    const checkAndReset = async () => {
+      if (shouldResetRanges()) {
+        await resetAllRanges()
+        // Recargar después del reset
+        try {
+          const { data, error } = await supabase
+            .from('custom_time_ranges')
+            .select('*')
+            .order('created_at', { ascending: true })
+          if (!error) {
+            const merged = mergeRanges(data || [])
+            setRanges(merged)
+            writeLocal(merged)
+          }
+        } catch (err) {
+          console.error('Error reloading after reset:', err)
+        }
+      }
+    }
+
+    // Verificar cada hora si es domingo
+    const interval = setInterval(checkAndReset, 60 * 60 * 1000) // Cada hora
+
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
