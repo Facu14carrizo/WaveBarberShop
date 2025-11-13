@@ -1395,7 +1395,7 @@ const TrashSection: React.FC<TrashSectionProps> = ({
         Papelera de Reciclaje ({deletedAppointments.length})
       </h3>
       <p className="text-gray-400 text-sm mb-6">
-        Los turnos eliminados se mantienen aquí por 30 días. Puedes restaurarlos o eliminarlos permanentemente.
+        Los turnos eliminados se mantienen aquí. Puedes restaurarlos o eliminarlos permanentemente.
       </p>
 
       {loading ? (
