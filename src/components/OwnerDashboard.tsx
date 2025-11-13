@@ -688,7 +688,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               }`}
             >
               <Trash className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-sm sm:text-base">Papelera</span>
             </button>
           </div>
         </div>
