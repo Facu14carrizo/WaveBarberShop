@@ -32,6 +32,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash'>('appointments');
   const [deletedAppointments, setDeletedAppointments] = useState<Appointment[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
+  const { ranges } = useSupabaseCustomTimeRanges();
+  const { availability } = useDayAvailability();
   const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -41,7 +43,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     customerPhone: '', 
     customerEmail: '', 
     notes: '',
-    additionalNames: '' // coma-separado para edición rápida
+    additionalNames: '', // coma-separado para edición rápida
+    time: '' // horario del turno
   });
   const [lastAction, setLastAction] = useState<null | { type: 'delete' | 'update'; snapshot: Appointment }>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -233,11 +236,15 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       customerPhone: appointment.customerPhone,
       customerEmail: appointment.customerEmail || '',
       notes: appointment.notes || '',
-      additionalNames: (appointment.additionalCustomerNames || []).join(', ')
+      additionalNames: (appointment.additionalCustomerNames || []).join(', '),
+      time: appointment.time
     });
   };
 
   const handleEditSave = (id: string) => {
+    const appointment = appointments.find(apt => apt.id === id);
+    if (!appointment) return;
+    
     const parsedAdditional = editForm.additionalNames
       .split(',')
       .map(n => n.trim())
@@ -249,15 +256,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       customerEmail: editForm.customerEmail || undefined,
       notes: editForm.notes || undefined,
       additionalCustomerNames: parsedAdditional.length > 0 ? parsedAdditional : undefined,
+      time: editForm.time, // Actualizar el horario
       updatedAt: new Date()
     });
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '' });
   };
 
   const handleEditCancel = () => {
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '' });
   };
 
   const handleStatusChange = (id: string, status: Appointment['status']) => {
@@ -426,6 +434,71 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               placeholder="Ej: Juan, Pedro"
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
             />
+          </div>
+
+          {/* Campo para editar horario */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Horario
+            </label>
+            {(() => {
+              // Calcular horarios disponibles para esta fecha
+              const appointmentDate = appointment.date;
+              const availableDays = getAvailableDays(ranges as CustomTimeRanges, availability);
+              
+              // Determinar qué día es (viernes o sábado)
+              const d = parseAppointmentDateTime(appointment.date, appointment.time);
+              const dayType = d?.getDay() === 5 ? 'friday' : d?.getDay() === 6 ? 'saturday' : null;
+              const dayData = dayType ? availableDays.find(day => day.day === dayType) : null;
+              
+              // Obtener todos los slots posibles para este día (incluyendo sobreturnos :30)
+              const allSlots = dayData?.slots.map(s => s.time) || [];
+              
+              // Agregar sobreturnos (:30) si el día está activo
+              const sobreturnos: string[] = [];
+              if (dayData && !dayData.isClosed) {
+                // Generar sobreturnos desde las 8:30 hasta las 23:30
+                for (let h = 8; h < 24; h++) {
+                  sobreturnos.push(`${String(h).padStart(2, '0')}:30`);
+                }
+              }
+              const allPossibleSlots = Array.from(new Set([...allSlots, ...sobreturnos]));
+              
+              // Filtrar slots ocupados (excluyendo el turno actual que se está editando)
+              const otherAppointments = appointments.filter(apt => apt.id !== appointment.id);
+              const availableSlots = allPossibleSlots.filter(slotTime => {
+                return isSlotAvailable(appointmentDate, slotTime, otherAppointments);
+              });
+              
+              // Incluir siempre el horario actual aunque esté "ocupado" (porque es el mismo turno)
+              const slotsToShow = Array.from(new Set([...availableSlots, appointment.time])).sort((a, b) => {
+                const [h1, m1] = a.split(':').map(Number);
+                const [h2, m2] = b.split(':').map(Number);
+                return (h1 * 60 + m1) - (h2 * 60 + m2);
+              });
+              
+              if (slotsToShow.length === 0) {
+                return (
+                  <div className="text-sm text-yellow-400">
+                    No hay horarios disponibles para este día
+                  </div>
+                );
+              }
+              
+              return (
+                <select
+                  value={editForm.time}
+                  onChange={(e) => setEditForm({ ...editForm, time: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                >
+                  {slotsToShow.map(time => (
+                    <option key={time} value={time}>
+                      {time} {time === appointment.time ? '(actual)' : ''}
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
           </div>
           
           <div className="flex space-x-2">
