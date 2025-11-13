@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -14,16 +14,24 @@ interface OwnerDashboardProps {
   onDeleteAppointment: (id: string) => void;
   onUpdateAppointment: (id: string, updates: Partial<Appointment>) => void;
   onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onRestoreAppointment: (id: string) => Promise<void>;
+  onPermanentlyDeleteAppointment: (id: string) => Promise<void>;
+  loadDeletedAppointments: () => Promise<Appointment[]>;
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   appointments,
   onDeleteAppointment,
   onUpdateAppointment,
-  onNewAppointment
+  onNewAppointment,
+  onRestoreAppointment,
+  onPermanentlyDeleteAppointment,
+  loadDeletedAppointments
 }) => {
   const SHOW_STATUS = false;
-  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash'>('appointments');
+  const [deletedAppointments, setDeletedAppointments] = useState<Appointment[]>([]);
+  const [loadingTrash, setLoadingTrash] = useState(false);
   const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -58,6 +66,24 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
     return () => clearInterval(interval);
   }, []);
+
+  // Cargar turnos eliminados cuando se cambia a la pestaña de papelera
+  React.useEffect(() => {
+    if (activeTab === 'trash') {
+      const loadTrash = async () => {
+        setLoadingTrash(true);
+        try {
+          const deleted = await loadDeletedAppointments();
+          setDeletedAppointments(deleted);
+        } catch (error) {
+          console.error('Error loading deleted appointments:', error);
+        } finally {
+          setLoadingTrash(false);
+        }
+      };
+      loadTrash();
+    }
+  }, [activeTab, loadDeletedAppointments]);
   const filteredAppointments = appointments.filter(apt => {
     const d = parseAppointmentDateTime(apt.date, apt.time);
     const isFri = !!d && d.getDay() === 5;
@@ -580,11 +606,45 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
               <span className="text-sm sm:text-base">Settings</span>
             </button>
+            <button
+              onClick={() => setActiveTab('trash')}
+              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+                activeTab === 'trash'
+                  ? 'bg-red-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Trash className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="text-sm sm:text-base">Papelera</span>
+            </button>
           </div>
         </div>
 
         {activeTab === 'analytics' ? (
           <Analytics appointments={appointments} />
+        ) : activeTab === 'trash' ? (
+          <TrashSection 
+            deletedAppointments={deletedAppointments}
+            loading={loadingTrash}
+            onRestore={async (id: string) => {
+              try {
+                await onRestoreAppointment(id);
+                const deleted = await loadDeletedAppointments();
+                setDeletedAppointments(deleted);
+              } catch (error) {
+                console.error('Error restoring appointment:', error);
+              }
+            }}
+            onPermanentlyDelete={async (id: string) => {
+              try {
+                await onPermanentlyDeleteAppointment(id);
+                const deleted = await loadDeletedAppointments();
+                setDeletedAppointments(deleted);
+              } catch (error) {
+                console.error('Error permanently deleting appointment:', error);
+              }
+            }}
+          />
         ) : activeTab === 'appointments' ? (
           <>
         {/* Stats Cards */}
@@ -1194,3 +1254,179 @@ function SobreturnoForm({ appointments, onNewAppointment, ranges, availability }
     </div>
   );
 }
+
+// Componente de Papelera de Reciclaje
+interface TrashSectionProps {
+  deletedAppointments: Appointment[];
+  loading: boolean;
+  onRestore: (id: string) => Promise<void>;
+  onPermanentlyDelete: (id: string) => Promise<void>;
+}
+
+const TrashSection: React.FC<TrashSectionProps> = ({
+  deletedAppointments,
+  loading,
+  onRestore,
+  onPermanentlyDelete
+}) => {
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleRestore = async (id: string) => {
+    setRestoringId(id);
+    try {
+      await onRestore(id);
+    } finally {
+      setRestoringId(null);
+    }
+  };
+
+  const handlePermanentlyDelete = async (id: string) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar permanentemente este turno? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    setDeletingId(id);
+    try {
+      await onPermanentlyDelete(id);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  function parseAppointmentDateTime(dateLabel: string, time: string) {
+    const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const monthName = m[2].toLowerCase();
+    const monthMap: Record<string, number> = {
+      'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
+      'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8,
+      'octubre': 9, 'noviembre': 10, 'diciembre': 11
+    };
+    const month = monthMap[monthName];
+    if (month == null) return null;
+    const [hour, minute] = time.split(':').map(Number);
+    const now = new Date();
+    let year = now.getFullYear();
+    let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
+    const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
+    if (candidate.getTime() < now.getTime() - sixMonths) {
+      candidate = new Date(year + 1, month, day, hour || 0, minute || 0, 0, 0);
+    }
+    return candidate;
+  }
+
+  return (
+    <div className="mb-6 sm:mb-8 md:mb-12">
+      <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 flex items-center">
+        <Trash className="h-5 w-5 mr-2 text-red-400" />
+        Papelera de Reciclaje ({deletedAppointments.length})
+      </h3>
+      <p className="text-gray-400 text-sm mb-6">
+        Los turnos eliminados se mantienen aquí por 30 días. Puedes restaurarlos o eliminarlos permanentemente.
+      </p>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="text-gray-400">Cargando turnos eliminados...</div>
+        </div>
+      ) : deletedAppointments.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 max-w-md mx-auto">
+            <Trash className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+            <h4 className="text-xl font-bold text-white mb-2">Papelera vacía</h4>
+            <p className="text-gray-400 text-sm">No hay turnos eliminados.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+          {deletedAppointments.map((appointment) => {
+            const d = parseAppointmentDateTime(appointment.date, appointment.time);
+            const isSobreturno = appointment.time.endsWith(':30');
+            const dayIdx = d ? d.getDay() : 6;
+            const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
+            
+            return (
+              <div
+                key={appointment.id}
+                className="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 border-l-red-500 opacity-75"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex items-center space-x-3">
+                    <div className="rounded-full p-2 bg-red-500/20 border border-red-500/30">
+                      <span className="text-lg">{appointment.service.icon}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-red-300">{appointment.date}</p>
+                      <div className="flex items-center space-x-2 text-gray-400">
+                        <Clock className="h-4 w-4" />
+                        <span className="font-medium">{appointment.time}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30">
+                    Eliminado
+                  </span>
+                </div>
+
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-2xl">{appointment.service.icon}</span>
+                    <div>
+                      <p className="font-semibold text-white">{appointment.service.name}</p>
+                      <p className="text-sm text-gray-400">${appointment.service.price.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <User className="h-5 w-5 text-gray-400" />
+                    <div>
+                      <p className="font-semibold text-white">{appointment.customerName}</p>
+                      {appointment.additionalCustomerNames && appointment.additionalCustomerNames.length > 0 && (
+                        <p className="text-sm text-gray-400">
+                          Acompañantes: {appointment.additionalCustomerNames.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3">
+                    <Phone className="h-5 w-5 text-gray-400" />
+                    <span className="text-gray-300">{appointment.customerPhone}</span>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-gray-700 flex space-x-2">
+                  <button
+                    onClick={() => handleRestore(appointment.id)}
+                    disabled={restoringId === appointment.id}
+                    className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-green-400 hover:bg-green-500/20 border border-green-500/30 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                    <span className="text-sm">
+                      {restoringId === appointment.id ? 'Restaurando...' : 'Restaurar'}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handlePermanentlyDelete(appointment.id)}
+                    disabled={deletingId === appointment.id}
+                    className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="text-sm">
+                      {deletingId === appointment.id ? 'Eliminando...' : 'Eliminar'}
+                    </span>
+                  </button>
+                </div>
+
+                <div className="pt-2 mt-2 text-xs text-gray-500 text-center">
+                  Eliminado el {new Date(appointment.updatedAt).toLocaleDateString()}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};

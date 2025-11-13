@@ -106,21 +106,85 @@ export const useSupabaseAppointments = () => {
   const loadAppointments = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
+      
+      // Primero intentar cargar con el filtro de deleted_at
+      let query = supabase
         .from('appointments')
         .select('*')
         .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      const convertedAppointments = data?.map(convertToAppointment) || []
-      setAppointments(convertedAppointments)
-      setError(null)
+      
+      // Intentar filtrar por deleted_at, pero si falla (columna no existe), cargar todos
+      try {
+        const { data, error } = await query.is('deleted_at', null)
+        
+        if (error) {
+          // Si el error es porque la columna no existe, cargar todos los turnos
+          if (error.message?.includes('deleted_at') || error.code === 'PGRST116') {
+            console.log('Columna deleted_at no existe, cargando todos los turnos')
+            const { data: allData, error: allError } = await supabase
+              .from('appointments')
+              .select('*')
+              .order('created_at', { ascending: false })
+            
+            if (allError) throw allError
+            
+            const convertedAppointments = allData?.map(convertToAppointment) || []
+            setAppointments(convertedAppointments)
+            setError(null)
+            return
+          }
+          throw error
+        }
+        
+        const convertedAppointments = data?.map(convertToAppointment) || []
+        setAppointments(convertedAppointments)
+        setError(null)
+      } catch (filterError: any) {
+        // Si falla el filtro, intentar cargar todos los turnos
+        console.log('Error con filtro deleted_at, cargando todos los turnos:', filterError)
+        const { data: allData, error: allError } = await supabase
+          .from('appointments')
+          .select('*')
+          .order('created_at', { ascending: false })
+        
+        if (allError) throw allError
+        
+        const convertedAppointments = allData?.map(convertToAppointment) || []
+        setAppointments(convertedAppointments)
+        setError(null)
+      }
     } catch (err) {
       console.error('Error loading appointments:', err)
       setError(err instanceof Error ? err.message : 'Error desconocido')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Cargar turnos eliminados (papelera)
+  const loadDeletedAppointments = async (): Promise<Appointment[]> => {
+    try {
+      // Intentar cargar turnos eliminados
+      const { data, error } = await supabase
+        .from('appointments')
+        .select('*')
+        .not('deleted_at', 'is', null) // Solo turnos eliminados
+        .order('deleted_at', { ascending: false })
+
+      if (error) {
+        // Si la columna no existe, retornar array vacío
+        if (error.message?.includes('deleted_at') || error.code === 'PGRST116') {
+          console.log('Columna deleted_at no existe, no hay turnos eliminados')
+          return []
+        }
+        throw error
+      }
+
+      return data?.map(convertToAppointment) || []
+    } catch (err) {
+      console.error('Error loading deleted appointments:', err)
+      // Si hay error, retornar array vacío en lugar de lanzar error
+      return []
     }
   }
 
@@ -183,17 +247,80 @@ export const useSupabaseAppointments = () => {
 
   const deleteAppointment = async (id: string) => {
     try {
+      // Intentar marcar como eliminado (si la columna existe)
+      const { error: updateError } = await supabase
+        .from('appointments')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      if (updateError) {
+        // Si la columna deleted_at no existe, eliminar permanentemente
+        if (updateError.message?.includes('deleted_at')) {
+          console.log('Columna deleted_at no existe, eliminando permanentemente')
+          const { error: deleteError } = await supabase
+            .from('appointments')
+            .delete()
+            .eq('id', id)
+          
+          if (deleteError) throw deleteError
+        } else {
+          throw updateError
+        }
+      }
+
+      // Remover de la lista de turnos activos
+      setAppointments(prev => prev.filter(apt => apt.id !== id))
+    } catch (err) {
+      console.error('Error deleting appointment:', err)
+      setError(err instanceof Error ? err.message : 'Error al eliminar turno')
+      throw err
+    }
+  }
+
+  // Restaurar un turno desde la papelera
+  const restoreAppointment = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ 
+          deleted_at: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      if (error) {
+        // Si la columna no existe, no hay nada que restaurar
+        if (error.message?.includes('deleted_at')) {
+          console.log('Columna deleted_at no existe, no se puede restaurar')
+          return
+        }
+        throw error
+      }
+
+      // Recargar turnos para incluir el restaurado
+      await loadAppointments()
+    } catch (err) {
+      console.error('Error restoring appointment:', err)
+      setError(err instanceof Error ? err.message : 'Error al restaurar turno')
+      throw err
+    }
+  }
+
+  // Eliminar permanentemente de la papelera
+  const permanentlyDeleteAppointment = async (id: string) => {
+    try {
       const { error } = await supabase
         .from('appointments')
         .delete()
         .eq('id', id)
 
       if (error) throw error
-
-      setAppointments(prev => prev.filter(apt => apt.id !== id))
     } catch (err) {
-      console.error('Error deleting appointment:', err)
-      setError(err instanceof Error ? err.message : 'Error al eliminar turno')
+      console.error('Error permanently deleting appointment:', err)
+      setError(err instanceof Error ? err.message : 'Error al eliminar permanentemente')
       throw err
     }
   }
@@ -205,6 +332,9 @@ export const useSupabaseAppointments = () => {
     addAppointment,
     updateAppointment,
     deleteAppointment,
+    restoreAppointment,
+    permanentlyDeleteAppointment,
+    loadDeletedAppointments,
     refresh: loadAppointments
   }
 }

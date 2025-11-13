@@ -23,6 +23,7 @@ export interface AppointmentRow {
   notes?: string
   created_at: string
   updated_at: string
+  deleted_at?: string | null // Fecha de eliminación (null = no eliminado)
 }
 
 export interface CustomTimeRangeRow {

@@ -21,7 +21,10 @@ function App() {
     appointments, 
     addAppointment,
     updateAppointment,
-    deleteAppointment
+    deleteAppointment,
+    restoreAppointment,
+    permanentlyDeleteAppointment,
+    loadDeletedAppointments
   } = useSupabaseAppointments();
   const { notifications, addNotification, removeNotification } = useNotifications();
 
@@ -180,6 +183,9 @@ function App() {
           onDeleteAppointment={handleDeleteAppointment}
           onUpdateAppointment={handleUpdateAppointment}
           onNewAppointment={handleNewAppointment}
+          onRestoreAppointment={restoreAppointment}
+          onPermanentlyDeleteAppointment={permanentlyDeleteAppointment}
+          loadDeletedAppointments={loadDeletedAppointments}
         />
       )}
       
