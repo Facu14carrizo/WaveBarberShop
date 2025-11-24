@@ -44,7 +44,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     customerEmail: '', 
     notes: '',
     additionalNames: '', // coma-separado para edición rápida
-    time: '' // horario del turno
+    time: '', // horario del turno
+    day: 'friday' as 'friday' | 'saturday' // día de la semana
   });
   const [lastAction, setLastAction] = useState<null | { type: 'delete' | 'update'; snapshot: Appointment }>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -231,13 +232,17 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   const handleEditStart = (appointment: Appointment) => {
     setEditingId(appointment.id);
+    // Determinar si es viernes o sábado basándome en la fecha
+    const d = parseAppointmentDateTime(appointment.date, appointment.time);
+    const dayType = d?.getDay() === 5 ? 'friday' : d?.getDay() === 6 ? 'saturday' : 'friday';
     setEditForm({
       customerName: appointment.customerName,
       customerPhone: appointment.customerPhone,
       customerEmail: appointment.customerEmail || '',
       notes: appointment.notes || '',
       additionalNames: (appointment.additionalCustomerNames || []).join(', '),
-      time: appointment.time
+      time: appointment.time,
+      day: dayType
     });
   };
 
@@ -250,6 +255,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       .map(n => n.trim())
       .filter(n => n.length > 0)
       .slice(0, 2);
+    
+    // Generar la nueva fecha basada en el día seleccionado
+    const newDate = editForm.day === 'friday' 
+      ? formatDate(getNextFriday())
+      : formatDate(getNextSaturday());
+    
     onUpdateAppointment(id, { 
       customerName: editForm.customerName,
       customerPhone: editForm.customerPhone,
@@ -257,15 +268,16 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       notes: editForm.notes || undefined,
       additionalCustomerNames: parsedAdditional.length > 0 ? parsedAdditional : undefined,
       time: editForm.time, // Actualizar el horario
+      date: newDate, // Actualizar la fecha
       updatedAt: new Date()
     });
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '', day: 'friday' });
   };
 
   const handleEditCancel = () => {
     setEditingId(null);
-    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '' });
+    setEditForm({ customerName: '', customerPhone: '', customerEmail: '', notes: '', additionalNames: '', time: '', day: 'friday' });
   };
 
   const handleStatusChange = (id: string, status: Appointment['status']) => {
@@ -436,20 +448,40 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             />
           </div>
 
+          {/* Campo para editar día (viernes o sábado) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Día
+            </label>
+            <select
+              value={editForm.day}
+              onChange={(e) => {
+                const newDay = e.target.value as 'friday' | 'saturday';
+                setEditForm({ ...editForm, day: newDay });
+              }}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+            >
+              <option value="friday">Viernes</option>
+              <option value="saturday">Sábado</option>
+            </select>
+          </div>
+
           {/* Campo para editar horario */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
               Horario
             </label>
             {(() => {
-              // Calcular horarios disponibles para esta fecha
-              const appointmentDate = appointment.date;
+              // Calcular horarios disponibles para el día seleccionado en el formulario
               const availableDays = getAvailableDays(ranges as CustomTimeRanges, availability);
               
-              // Determinar qué día es (viernes o sábado)
-              const d = parseAppointmentDateTime(appointment.date, appointment.time);
-              const dayType = d?.getDay() === 5 ? 'friday' : d?.getDay() === 6 ? 'saturday' : null;
-              const dayData = dayType ? availableDays.find(day => day.day === dayType) : null;
+              // Usar el día seleccionado en el formulario de edición
+              const dayData = availableDays.find(day => day.day === editForm.day);
+              
+              // Generar la fecha correspondiente al día seleccionado
+              const selectedDate = editForm.day === 'friday' 
+                ? formatDate(getNextFriday())
+                : formatDate(getNextSaturday());
               
               // Obtener todos los slots posibles para este día (incluyendo sobreturnos :30)
               const allSlots = dayData?.slots.map(s => s.time) || [];
@@ -467,7 +499,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               // Filtrar slots ocupados (excluyendo el turno actual que se está editando)
               const otherAppointments = appointments.filter(apt => apt.id !== appointment.id);
               const availableSlots = allPossibleSlots.filter(slotTime => {
-                return isSlotAvailable(appointmentDate, slotTime, otherAppointments);
+                return isSlotAvailable(selectedDate, slotTime, otherAppointments);
               });
               
               // Incluir siempre el horario actual aunque esté "ocupado" (porque es el mismo turno)
