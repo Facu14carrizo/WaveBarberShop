@@ -31,51 +31,183 @@ export interface BannedEmail {
   banned_at: string;
 }
 
-// Función para obtener la IP del usuario
+// Función para obtener la IP del usuario con múltiples servicios de fallback
 export const getUserIP = async (): Promise<string | null> => {
   console.log('[getUserIP] Iniciando obtención de IP...');
-  try {
-    // Intentar obtener IP desde un servicio externo
-    console.log('[getUserIP] Intentando con api.ipify.org...');
-    const response = await fetch('https://api.ipify.org?format=json', {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json'
+  
+  // Lista de servicios para intentar (en orden de preferencia)
+  const ipServices = [
+    {
+      name: 'api.ipify.org',
+      url: 'https://api.ipify.org?format=json',
+      parser: async (response: Response) => {
+        const data = await response.json();
+        return data.ip || null;
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    },
+    {
+      name: 'ipapi.co',
+      url: 'https://ipapi.co/ip/',
+      parser: async (response: Response) => {
+        const text = await response.text();
+        return text.trim() || null;
+      }
+    },
+    {
+      name: 'api64.ipify.org',
+      url: 'https://api64.ipify.org?format=json',
+      parser: async (response: Response) => {
+        const data = await response.json();
+        return data.ip || null;
+      }
+    },
+    {
+      name: 'icanhazip.com',
+      url: 'https://icanhazip.com',
+      parser: async (response: Response) => {
+        const text = await response.text();
+        return text.trim() || null;
+      }
+    },
+    {
+      name: 'ifconfig.me',
+      url: 'https://ifconfig.me/ip',
+      parser: async (response: Response) => {
+        const text = await response.text();
+        return text.trim() || null;
+      }
+    },
+    {
+      name: 'api.ipify.org (text)',
+      url: 'https://api.ipify.org',
+      parser: async (response: Response) => {
+        const text = await response.text();
+        return text.trim() || null;
+      }
     }
-    
-    const data = await response.json();
-    const ip = data.ip || null;
-    console.log('[getUserIP] ✅ IP obtenida de api.ipify.org:', ip);
-    return ip;
-  } catch (error) {
-    console.warn('[getUserIP] Error con api.ipify.org, intentando fallback...', error);
-    // Fallback: intentar con otro servicio
+  ];
+
+  // Intentar cada servicio con timeout
+  for (const service of ipServices) {
     try {
-      console.log('[getUserIP] Intentando con ipapi.co...');
-      const response = await fetch('https://ipapi.co/ip/', {
-        method: 'GET',
-        headers: {
-          'Accept': 'text/plain'
+      console.log(`[getUserIP] Intentando con ${service.name}...`);
+      
+      // Crear un AbortController para timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 segundos de timeout
+      
+      try {
+        const response = await fetch(service.url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json, text/plain, */*'
+          },
+          signal: controller.signal,
+          // En móviles, a veces es necesario no usar cors
+          mode: 'cors',
+          cache: 'no-cache'
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const ip = await service.parser(response);
+        
+        if (ip && /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(ip)) {
+          console.log(`[getUserIP] ✅ IP obtenida de ${service.name}:`, ip);
+          return ip;
+        } else {
+          console.warn(`[getUserIP] IP inválida de ${service.name}:`, ip);
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        if (fetchError.name === 'AbortError') {
+          console.warn(`[getUserIP] Timeout con ${service.name}`);
+        } else {
+          throw fetchError;
+        }
       }
-      
-      const ip = (await response.text()).trim();
-      console.log('[getUserIP] ✅ IP obtenida de ipapi.co:', ip);
-      return ip || null;
-    } catch (fallbackError) {
-      console.error('[getUserIP] ❌ Error en fallback de IP:', fallbackError);
-      return null;
+    } catch (error: any) {
+      console.warn(`[getUserIP] Error con ${service.name}:`, error.message || error);
+      // Continuar con el siguiente servicio
+      continue;
     }
   }
+
+  // Si todos los servicios fallaron, intentar con RTCPeerConnection como último recurso
+  try {
+    console.log('[getUserIP] Intentando con RTCPeerConnection (último recurso)...');
+    const ip = await getIPWithRTCPeerConnection();
+    if (ip) {
+      console.log('[getUserIP] ✅ IP obtenida con RTCPeerConnection:', ip);
+      return ip;
+    }
+  } catch (rtcError) {
+    console.warn('[getUserIP] Error con RTCPeerConnection:', rtcError);
+  }
+
+  console.error('[getUserIP] ❌ No se pudo obtener la IP con ningún método');
+  return null;
+};
+
+// Función auxiliar para obtener IP usando RTCPeerConnection (último recurso)
+const getIPWithRTCPeerConnection = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    try {
+      const RTCPeerConnection = window.RTCPeerConnection || 
+                                (window as any).webkitRTCPeerConnection || 
+                                (window as any).mozRTCPeerConnection;
+      
+      if (!RTCPeerConnection) {
+        resolve(null);
+        return;
+      }
+
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
+
+      let ipFound = false;
+      const timeout = setTimeout(() => {
+        if (!ipFound) {
+          pc.close();
+          resolve(null);
+        }
+      }, 3000);
+
+      pc.createDataChannel('');
+      
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const candidate = event.candidate.candidate;
+          const match = candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+          if (match && match[1]) {
+            const ip = match[1];
+            // Filtrar IPs locales
+            if (ip !== '127.0.0.1' && !ip.startsWith('192.168.') && !ip.startsWith('10.') && !ip.startsWith('172.')) {
+              ipFound = true;
+              clearTimeout(timeout);
+              pc.close();
+              resolve(ip);
+            }
+          }
+        }
+      };
+
+      pc.createOffer()
+        .then(offer => pc.setLocalDescription(offer))
+        .catch(() => {
+          clearTimeout(timeout);
+          pc.close();
+          resolve(null);
+        });
+    } catch (error) {
+      resolve(null);
+    }
+  });
 };
 
 export const useBans = () => {

@@ -103,49 +103,52 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             Experimenta el mejor servicio de barbería en un ambiente exclusivo
           </p>
           
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl max-w-4xl mx-auto animate-slide-up hover:shadow-2xl transition-all duration-500 hover:scale-105">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-center">
-              <div className="flex flex-col items-center space-y-1 sm:space-y-2">
-                <div className="bg-purple-500/20 border border-purple-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}>
-                  <MapPin className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-purple-400" />
+          {/* Panel de características - Solo visible cuando NO hay servicio seleccionado */}
+          {!selectedService && (
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl max-w-4xl mx-auto animate-slide-up hover:shadow-2xl transition-all duration-500 hover:scale-105">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-center">
+                <div className="flex flex-col items-center space-y-1 sm:space-y-2">
+                  <div className="bg-purple-500/20 border border-purple-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.2s', animationFillMode: 'forwards' }}>
+                    <MapPin className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm sm:text-base">Ubicación</p>
+                    <p className="text-xs sm:text-sm text-gray-400">Ricardo Rojas, Tigre</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-white text-sm sm:text-base">Ubicación</p>
-                  <p className="text-xs sm:text-sm text-gray-400">Ricardo Rojas, Tigre</p>
+                
+                <div className="flex flex-col items-center space-y-1 sm:space-y-2">
+                  <div className="bg-blue-500/20 border border-blue-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
+                    <Star className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm sm:text-base">Calidad</p>
+                    <p className="text-xs sm:text-sm text-gray-400">5 estrellas</p>
+                  </div>
                 </div>
-              </div>
-              
-              <div className="flex flex-col items-center space-y-1 sm:space-y-2">
-                <div className="bg-blue-500/20 border border-blue-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.3s', animationFillMode: 'forwards' }}>
-                  <Star className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-blue-400" />
+                
+                <div className="flex flex-col items-center space-y-1 sm:space-y-2">
+                  <div className="bg-cyan-500/20 border border-cyan-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
+                    <Award className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-cyan-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm sm:text-base">Experiencia</p>
+                    <p className="text-xs sm:text-sm text-gray-400">+7 años</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-white text-sm sm:text-base">Calidad</p>
-                  <p className="text-xs sm:text-sm text-gray-400">5 estrellas</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col items-center space-y-1 sm:space-y-2">
-                <div className="bg-cyan-500/20 border border-cyan-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
-                  <Award className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-cyan-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white text-sm sm:text-base">Experiencia</p>
-                  <p className="text-xs sm:text-sm text-gray-400">+7 años</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-col items-center space-y-1 sm:space-y-2">
-                <div className="bg-green-500/20 border border-green-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>
-                  <Shield className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white text-sm sm:text-base">Higiene</p>
-                  <p className="text-xs sm:text-sm text-gray-400">Sanidad</p>
+                
+                <div className="flex flex-col items-center space-y-1 sm:space-y-2">
+                  <div className="bg-green-500/20 border border-green-500/30 rounded-full p-2 sm:p-3 opacity-0 animate-fade-in-up" style={{ animationDelay: '0.5s', animationFillMode: 'forwards' }}>
+                    <Shield className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm sm:text-base">Higiene</p>
+                    <p className="text-xs sm:text-sm text-gray-400">Sanidad</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Service Selection */}
