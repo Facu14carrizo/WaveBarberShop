@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase, AppointmentRow } from '../lib/supabase'
 import { Appointment } from '../types'
+import { getUserIP } from './useBans'
 
 // Marcador para acompañantes dentro de notes
 const COMPANIONS_MARK = '::ACOMP::'
@@ -25,6 +26,11 @@ const parseNotes = (notes?: string): { companions: string[]; cleanNotes?: string
 // Función para convertir de AppointmentRow (Supabase) a Appointment (app)
 const convertToAppointment = (row: AppointmentRow): Appointment => {
   const parsed = parseNotes(row.notes)
+  
+  // Asegurar que ipAddress se convierta correctamente (null/undefined -> undefined)
+  // Convertir null explícitamente a undefined para cumplir con el tipo Appointment
+  const ipAddress = row.ip_address ? row.ip_address : undefined;
+  
   return {
     id: row.id,
     customerName: row.customer_name,
@@ -43,6 +49,7 @@ const convertToAppointment = (row: AppointmentRow): Appointment => {
     status: row.status,
     notes: parsed.cleanNotes,
     additionalCustomerNames: parsed.companions,
+    ipAddress: ipAddress,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at)
   }
@@ -56,6 +63,10 @@ const convertToRow = (
     ? `${COMPANIONS_MARK}${JSON.stringify(appointment.additionalCustomerNames)}\n`
     : ''
   const combinedNotes = `${companions}${appointment.notes || ''}`.trim()
+  
+  // Asegurar que ip_address sea string, null o undefined (Supabase acepta null)
+  const ipAddress = appointment.ipAddress || null;
+  
   return {
     id: appointment.id ?? '',   // <-- Añadido para evitar error de tipo
     customer_name: appointment.customerName,
@@ -68,7 +79,8 @@ const convertToRow = (
     date: appointment.date,
     time: appointment.time,
     status: appointment.status,
-    notes: combinedNotes || null as any
+    notes: combinedNotes || null as any,
+    ip_address: ipAddress as string | null | undefined
   }
 }
 
@@ -131,6 +143,10 @@ export const useSupabaseAppointments = () => {
             if (allError) throw allError
             
             const convertedAppointments = allData?.map(convertToAppointment) || []
+            console.log('[loadAppointments] Turnos cargados (sin filtro):', convertedAppointments.length);
+            // Log de IPs para debugging
+            const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
+            console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
             setAppointments(convertedAppointments)
             setError(null)
             return
@@ -139,6 +155,10 @@ export const useSupabaseAppointments = () => {
         }
         
         const convertedAppointments = data?.map(convertToAppointment) || []
+        console.log('[loadAppointments] Turnos cargados:', convertedAppointments.length);
+        // Log de IPs para debugging
+        const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
+        console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
         setAppointments(convertedAppointments)
         setError(null)
       } catch (filterError: any) {
@@ -152,6 +172,10 @@ export const useSupabaseAppointments = () => {
         if (allError) throw allError
         
         const convertedAppointments = allData?.map(convertToAppointment) || []
+        console.log('[loadAppointments] Turnos cargados (fallback):', convertedAppointments.length);
+        // Log de IPs para debugging
+        const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
+        console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
         setAppointments(convertedAppointments)
         setError(null)
       }
@@ -192,23 +216,170 @@ export const useSupabaseAppointments = () => {
 
   const addAppointment = async (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      // Obtener IP del usuario
+      console.log('[addAppointment] Iniciando obtención de IP...');
+      const userIP = await getUserIP();
+      console.log('[addAppointment] ✅ IP obtenida:', userIP);
+      
+      if (!userIP) {
+        console.warn('[addAppointment] ⚠️ No se pudo obtener la IP del usuario. El turno se guardará sin IP.');
+      }
+      
+      // Validar baneos - verificar en Supabase y localStorage
+      let bannedIPs: any[] = [];
+      
+      // Cargar desde Supabase
+      try {
+        const { data: supabaseIPs, error } = await supabase
+          .from('banned_ips')
+          .select('*');
+        
+        if (!error && supabaseIPs) {
+          bannedIPs = [...supabaseIPs];
+          console.log('[addAppointment] IPs baneadas en Supabase:', bannedIPs.length);
+        }
+      } catch (supabaseErr) {
+        console.warn('[addAppointment] Error cargando de Supabase:', supabaseErr);
+      }
+      
+      // Cargar desde localStorage y combinar
+      try {
+        const localIPs = JSON.parse(localStorage.getItem('banned_ips') || '[]');
+        localIPs.forEach((localIP: any) => {
+          if (!bannedIPs.some(b => b.ip_address === localIP.ip_address)) {
+            bannedIPs.push(localIP);
+          }
+        });
+        console.log('[addAppointment] Total IPs baneadas (combinadas):', bannedIPs.length);
+      } catch (localErr) {
+        console.error('[addAppointment] Error cargando localStorage:', localErr);
+      }
+      
+      // Verificar si está baneado - IP
+      if (userIP) {
+        const userIPTrimmed = userIP.trim();
+        console.log('[addAppointment] Verificando si IP está baneada:', userIPTrimmed);
+        console.log('[addAppointment] Lista de IPs baneadas:', bannedIPs.map((b: any) => b.ip_address));
+        
+        const isBanned = bannedIPs.some((b: any) => {
+          const bannedIP = (b.ip_address || '').trim();
+          const matches = bannedIP === userIPTrimmed;
+          if (matches) {
+            console.log('[addAppointment] ¡IP baneada encontrada!', { bannedIP, userIPTrimmed });
+          }
+          return matches;
+        });
+        
+        if (isBanned) {
+          const banInfo = bannedIPs.find((b: any) => (b.ip_address || '').trim() === userIPTrimmed);
+          const reason = banInfo?.reason ? ` Razón: ${banInfo.reason}` : '';
+          console.error('[addAppointment] ❌ IP BANEADA - Bloqueando creación de turno:', userIPTrimmed);
+          throw new Error(`🚫 Tu IP ha sido bloqueada. No puedes crear turnos.${reason}`);
+        }
+        console.log('[addAppointment] ✅ IP no está baneada, continuando con la creación del turno...');
+      } else {
+        console.warn('[addAppointment] No se pudo obtener la IP del usuario');
+      }
+      
+      // Cargar teléfonos y emails baneados
+      const bannedPhones = JSON.parse(localStorage.getItem('banned_phones') || '[]');
+      const bannedEmails = JSON.parse(localStorage.getItem('banned_emails') || '[]');
+      
+      // Intentar cargar también desde Supabase
+      try {
+        const { data: supabasePhones } = await supabase.from('banned_phones').select('*');
+        if (supabasePhones) {
+          supabasePhones.forEach((sp: any) => {
+            if (!bannedPhones.some((bp: any) => bp.phone === sp.phone)) {
+              bannedPhones.push(sp);
+            }
+          });
+        }
+      } catch {}
+      
+      try {
+        const { data: supabaseEmails } = await supabase.from('banned_emails').select('*');
+        if (supabaseEmails) {
+          supabaseEmails.forEach((se: any) => {
+            if (!bannedEmails.some((be: any) => be.email === se.email)) {
+              bannedEmails.push(se);
+            }
+          });
+        }
+      } catch {}
+      
+      // Verificar si está baneado - Teléfono
+      const normalizedPhone = appointment.customerPhone.replace(/\s|-|\(|\)/g, '');
+      const bannedPhone = bannedPhones.find((b: any) => {
+        const bNormalized = b.phone?.replace(/\s|-|\(|\)/g, '');
+        return bNormalized === normalizedPhone;
+      });
+      if (bannedPhone) {
+        const reason = bannedPhone.reason ? ` Razón: ${bannedPhone.reason}` : '';
+        throw new Error(`🚫 Este teléfono ha sido bloqueado. No puedes crear turnos.${reason}`);
+      }
+      
+      // Verificar si está baneado - Email
+      if (appointment.customerEmail) {
+        const emailLower = appointment.customerEmail.toLowerCase();
+        const bannedEmail = bannedEmails.find((b: any) => b.email?.toLowerCase() === emailLower);
+        if (bannedEmail) {
+          const reason = bannedEmail.reason ? ` Razón: ${bannedEmail.reason}` : '';
+          throw new Error(`🚫 Este email ha sido bloqueado. No puedes crear turnos.${reason}`);
+        }
+      }
+      
       // Asegurar que haya ID
       const id = (appointment as any).id ?? Math.random().toString(36).substr(2, 9);
-      const withId = { ...appointment, id };
+      // Guardar IP (usar undefined para TypeScript, pero convertToRow lo convertirá a null para Supabase)
+      const withId = { ...appointment, id, ipAddress: userIP || undefined };
       const row = convertToRow(withId);
+      
+      console.log('[addAppointment] 📝 Preparando para guardar:', {
+        appointmentId: id,
+        userIP: userIP,
+        ipAddress_in_object: withId.ipAddress,
+        ip_address_in_row: row.ip_address,
+        row_completo: row
+      });
+      
+      const insertData = {
+        ...row,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log('[addAppointment] 📤 Insertando en Supabase:', {
+        ...insertData,
+        ip_address: insertData.ip_address
+      });
+      
       const { data, error } = await supabase
         .from('appointments')
-        .insert([{
-          ...row,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
+        .insert([insertData])
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('[addAppointment] ❌ Error insertando en Supabase:', error);
+        console.error('[addAppointment] Datos que se intentaron insertar:', insertData);
+        throw error;
+      }
 
-      const newAppointment = convertToAppointment(data)
+      console.log('[addAppointment] ✅ Turno guardado exitosamente');
+      console.log('[addAppointment] 📥 Respuesta de Supabase:', {
+        id: data?.id,
+        ip_address_en_respuesta: data?.ip_address,
+        data_completa: data
+      });
+      
+      const newAppointment = convertToAppointment(data);
+      console.log('[addAppointment] 🔄 Appointment convertido:', {
+        id: newAppointment.id,
+        ipAddress: newAppointment.ipAddress,
+        tieneIP: !!newAppointment.ipAddress
+      });
+      
       setAppointments(prev => [newAppointment, ...prev])
       return newAppointment
     } catch (err) {

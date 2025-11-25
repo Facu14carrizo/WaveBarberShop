@@ -9,6 +9,7 @@ export interface Appointment {
   status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
   service: Service;
   notes?: string;
+  ipAddress?: string; // IP del usuario que creó el turno
   createdAt: Date;
   updatedAt: Date;
   reminderSent?: boolean;

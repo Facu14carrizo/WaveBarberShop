@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -8,6 +8,8 @@ import { services } from '../data/services';
 import { Appointment, Service } from '../types';
 import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
+import { ConfirmBanModal } from './ConfirmBanModal';
+import { useBans } from '../hooks/useBans';
 
 interface OwnerDashboardProps {
   appointments: Appointment[];
@@ -29,11 +31,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   loadDeletedAppointments
 }) => {
   const SHOW_STATUS = false;
-  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans'>('appointments');
   const [deletedAppointments, setDeletedAppointments] = useState<Appointment[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
   const { availability } = useDayAvailability();
+  const { banIP, banPhone, banEmail, unbanIP, bannedIPs, isIPBanned, isPhoneBanned, isEmailBanned, refresh: refreshBans } = useBans();
+  const { addNotification } = useNotifications();
   const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -49,6 +53,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   });
   const [lastAction, setLastAction] = useState<null | { type: 'delete' | 'update'; snapshot: Appointment }>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [banModalOpen, setBanModalOpen] = useState(false);
+  const [appointmentToBan, setAppointmentToBan] = useState<Appointment | null>(null);
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -291,6 +297,154 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     onDeleteAppointment(appointment.id);
   };
 
+  const handleBanFromAppointment = (appointment: Appointment) => {
+    console.log('handleBanFromAppointment llamado', appointment);
+    setAppointmentToBan(appointment);
+    setBanModalOpen(true);
+  };
+
+  const handleConfirmBan = async () => {
+    if (!appointmentToBan) return;
+
+    console.log('Iniciando proceso de baneo...');
+    setBanModalOpen(false);
+    
+    try {
+      const reason = `Turno troll: ${appointmentToBan.customerName} - ${appointmentToBan.date} ${appointmentToBan.time}`;
+      let banned = false;
+      const results: string[] = [];
+
+      // Banear IP si existe
+      console.log('[handleConfirmBan] Turno a banear:', {
+        id: appointmentToBan.id,
+        ipAddress: appointmentToBan.ipAddress,
+        customerPhone: appointmentToBan.customerPhone,
+        customerEmail: appointmentToBan.customerEmail
+      });
+      
+      if (appointmentToBan.ipAddress && appointmentToBan.ipAddress.trim() !== '') {
+        const ipToBan = appointmentToBan.ipAddress.trim();
+        console.log('[handleConfirmBan] ✅ IP encontrada, baneando:', ipToBan);
+        try {
+          const ipResult = await banIP(ipToBan, reason);
+          console.log('[handleConfirmBan] Resultado de banIP:', ipResult);
+          if (ipResult) {
+            banned = true;
+            results.push('IP baneada');
+            console.log('[handleConfirmBan] IP baneada exitosamente');
+          } else {
+            console.warn('[handleConfirmBan] banIP retornó false');
+            // Fallback: guardar directamente en localStorage
+            const localBans = JSON.parse(localStorage.getItem('banned_ips') || '[]');
+            if (!localBans.some((b: any) => (b.ip_address || '').trim() === ipToBan)) {
+              localBans.push({
+                id: Math.random().toString(36).substr(2, 9),
+                ip_address: ipToBan,
+                reason: reason,
+                banned_at: new Date().toISOString()
+              });
+              localStorage.setItem('banned_ips', JSON.stringify(localBans));
+              banned = true;
+              results.push('IP baneada (localStorage)');
+              console.log('[handleConfirmBan] IP guardada en localStorage como fallback');
+            }
+          }
+        } catch (ipError) {
+          console.error('[handleConfirmBan] Error al banear IP:', ipError);
+          // Fallback: guardar directamente en localStorage
+          const localBans = JSON.parse(localStorage.getItem('banned_ips') || '[]');
+          if (!localBans.some((b: any) => (b.ip_address || '').trim() === ipToBan)) {
+            localBans.push({
+              id: Math.random().toString(36).substr(2, 9),
+              ip_address: ipToBan,
+              reason: reason,
+              banned_at: new Date().toISOString()
+            });
+            localStorage.setItem('banned_ips', JSON.stringify(localBans));
+            banned = true;
+            results.push('IP baneada (localStorage fallback)');
+            console.log('[handleConfirmBan] IP guardada en localStorage después de error');
+          }
+        }
+      } else {
+        console.log('[handleConfirmBan] No hay IP disponible para banear - el turno no tiene IP guardada');
+      }
+
+      // Banear teléfono
+      console.log('Baneando teléfono:', appointmentToBan.customerPhone);
+      const phoneResult = await banPhone(appointmentToBan.customerPhone, reason);
+      if (phoneResult) {
+        banned = true;
+        results.push('Teléfono baneado');
+        console.log('Teléfono baneado exitosamente');
+      } else {
+        console.warn('No se pudo banear el teléfono');
+      }
+
+      // Banear email si existe
+      if (appointmentToBan.customerEmail) {
+        console.log('Baneando email:', appointmentToBan.customerEmail);
+        const emailResult = await banEmail(appointmentToBan.customerEmail, reason);
+        if (emailResult) {
+          banned = true;
+          results.push('Email baneado');
+          console.log('Email baneado exitosamente');
+        } else {
+          console.warn('No se pudo banear el email');
+        }
+      } else {
+        console.log('No hay email disponible para banear');
+      }
+
+      console.log('[handleConfirmBan] Resultados del baneo:', results, 'banned:', banned);
+
+      if (banned) {
+        addNotification({
+          type: 'success',
+          title: 'Baneo Exitoso',
+          message: `${results.join(', ')}. No podrán crear nuevos turnos.`
+        });
+        
+        // Recargar la lista de baneos
+        await refreshBans();
+        
+        // Sincronizar localStorage con Supabase para que la validación funcione inmediatamente
+        try {
+          const { supabase } = await import('../lib/supabase');
+          const { data: freshBans } = await supabase.from('banned_ips').select('*');
+          if (freshBans) {
+            localStorage.setItem('banned_ips', JSON.stringify(freshBans));
+            console.log('[handleConfirmBan] ✅ localStorage sincronizado con', freshBans.length, 'IPs baneadas');
+          }
+        } catch (syncError) {
+          console.warn('[handleConfirmBan] Error sincronizando localStorage:', syncError);
+        }
+        
+        console.log('[handleConfirmBan] ✅ Baneo completado y lista actualizada');
+      } else {
+        addNotification({
+          type: 'warning',
+          title: 'Advertencia',
+          message: 'No se pudo completar el baneo. Verifica la consola para más detalles.'
+        });
+      }
+    } catch (error) {
+      console.error('Error baneando:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: `No se pudo completar el baneo: ${error instanceof Error ? error.message : 'Error desconocido'}`
+      });
+    } finally {
+      setAppointmentToBan(null);
+    }
+  };
+
+  const handleCancelBan = () => {
+    setBanModalOpen(false);
+    setAppointmentToBan(null);
+  };
+
   const handleUndo = () => {
     if (!lastAction) return;
     const snap = lastAction.snapshot;
@@ -332,6 +486,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
       const now = currentTime;
       const isPast = !!d && d.getTime() < now.getTime();
+      
+      // Verificar si el turno está baneado usando las funciones del hook
+      const appointmentIPBanned = appointment.ipAddress ? isIPBanned(appointment.ipAddress) : false;
+      const appointmentPhoneBanned = isPhoneBanned(appointment.customerPhone);
+      const appointmentEmailBanned = appointment.customerEmail ? isEmailBanned(appointment.customerEmail) : false;
+      const isBanned = appointmentIPBanned || appointmentPhoneBanned || appointmentEmailBanned;
       const borderClass = theme === 'orange'
         ? 'border-l-orange-500'
         : theme === 'blue'
@@ -627,20 +787,42 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                 )}
               </div>
               
-              <div className="flex space-x-2">
+              <div className="flex flex-col space-y-2">
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleEditStart(appointment)}
+                    className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg transition-colors duration-200"
+                  >
+                    <Edit className="h-4 w-4" />
+                    <span className="text-sm">Editar</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(appointment)}
+                    className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors duration-200"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="text-sm">Eliminar</span>
+                  </button>
+                </div>
                 <button
-                  onClick={() => handleEditStart(appointment)}
-                  className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-blue-400 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg transition-colors duration-200"
+                  onClick={(e) => {
+                    if (isBanned) return; // No hacer nada si ya está baneado
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Botón Banear clickeado para turno:', appointment.id);
+                    handleBanFromAppointment(appointment);
+                  }}
+                  className={`w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
+                    isBanned
+                      ? 'bg-red-600/20 text-red-400 border border-red-500/30 cursor-not-allowed'
+                      : 'text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
+                  }`}
+                  title={isBanned ? 'Este turno ya está baneado' : 'Banear IP, teléfono y email de este turno'}
+                  type="button"
+                  disabled={isBanned}
                 >
-                  <Edit className="h-4 w-4" />
-                  <span className="text-sm">Editar</span>
-                </button>
-                <button
-                  onClick={() => handleDelete(appointment)}
-                  className="flex-1 flex items-center justify-center space-x-2 px-3 py-2 text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded-lg transition-colors duration-200"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="text-sm">Eliminar</span>
+                  <Ban className="h-4 w-4" />
+                  <span className="text-sm">{isBanned ? 'Baneado' : 'Banear'}</span>
                 </button>
               </div>
             </div>
@@ -721,11 +903,27 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             >
               <Trash className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
+            <button
+              onClick={() => setActiveTab('bans')}
+              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+                activeTab === 'bans'
+                  ? 'bg-orange-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+            >
+              <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+            </button>
           </div>
         </div>
 
         {activeTab === 'analytics' ? (
           <Analytics appointments={appointments} />
+        ) : activeTab === 'bans' ? (
+          <BansSection 
+            bannedIPs={bannedIPs}
+            onUnbanIP={unbanIP}
+            onRefresh={refreshBans}
+          />
         ) : activeTab === 'trash' ? (
           <TrashSection 
             deletedAppointments={deletedAppointments}
@@ -912,6 +1110,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         ) : (
           <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} />
         )}
+
+        {/* Modal de Confirmación de Baneo */}
+        <ConfirmBanModal
+          isOpen={banModalOpen}
+          appointment={appointmentToBan}
+          onConfirm={handleConfirmBan}
+          onCancel={handleCancelBan}
+        />
       </div>
     </div>
   );
@@ -1531,6 +1737,107 @@ const TrashSection: React.FC<TrashSectionProps> = ({
           })}
         </div>
       )}
+    </div>
+  );
+};
+
+// Componente de Gestión de Baneos
+interface BansSectionProps {
+  bannedIPs: any[];
+  onUnbanIP: (ip: string) => Promise<boolean>;
+  onRefresh: () => Promise<void>;
+}
+
+const BansSection: React.FC<BansSectionProps> = ({
+  bannedIPs,
+  onUnbanIP,
+  onRefresh
+}) => {
+  const { addNotification } = useNotifications();
+  const [unbanning, setUnbanning] = useState<string | null>(null);
+
+  const handleUnban = async (ip: string) => {
+    if (!window.confirm(`¿Estás seguro de que deseas desbanear la IP ${ip}?`)) {
+      return;
+    }
+
+    setUnbanning(`ip-${ip}`);
+    try {
+      const success = await onUnbanIP(ip);
+
+      if (success) {
+        addNotification({
+          type: 'success',
+          title: 'Desbaneo Exitoso',
+          message: `La IP ${ip} ha sido desbaneada correctamente.`
+        });
+        await onRefresh();
+      }
+    } catch (error) {
+      console.error('Error desbaneando:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo desbanear. Intenta nuevamente.'
+      });
+    } finally {
+      setUnbanning(null);
+    }
+  };
+
+  return (
+    <div className="mb-6 sm:mb-8 md:mb-12">
+      <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 flex items-center">
+        <Shield className="h-5 w-5 mr-2 text-orange-400" />
+        Gestión de Baneos - IPs
+      </h3>
+      <p className="text-gray-400 text-sm mb-6">
+        Gestiona las IPs baneadas. Los usuarios con IPs baneadas no podrán crear nuevos turnos.
+      </p>
+
+      <div className="max-w-4xl mx-auto">
+        {/* IPs Baneadas */}
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+          <h4 className="text-lg font-semibold text-white mb-4 flex items-center">
+            <Ban className="h-4 w-4 mr-2 text-orange-400" />
+            IPs Baneadas ({bannedIPs.length})
+          </h4>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {bannedIPs.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500 text-sm">No hay IPs baneadas</p>
+              </div>
+            ) : (
+              bannedIPs.map((ban) => (
+                <div key={ban.ip_address} className="bg-gray-700/50 rounded-lg p-3 sm:p-4 flex items-center justify-between hover:bg-gray-700/70 transition-colors">
+                  <div className="flex-1">
+                    <p className="text-white font-medium text-sm sm:text-base">{ban.ip_address}</p>
+                    {ban.reason && (
+                      <p className="text-gray-400 text-xs sm:text-sm mt-1">{ban.reason}</p>
+                    )}
+                    <p className="text-gray-500 text-xs mt-1">
+                      Baneado el {new Date(ban.banned_at).toLocaleDateString('es-AR', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleUnban(ban.ip_address)}
+                    disabled={unbanning === `ip-${ban.ip_address}`}
+                    className="ml-3 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {unbanning === `ip-${ban.ip_address}` ? 'Desbaneando...' : 'Desbanear'}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

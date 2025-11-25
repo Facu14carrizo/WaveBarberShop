@@ -6,6 +6,7 @@ import { NotificationToast } from './components/NotificationToast';
 import { PinAuthModal } from './components/PinAuthModal';
 import { BackButton } from './components/BackButton';
 import { BackgroundMusic } from './components/BackgroundMusic';
+import { SEOHead } from './components/SEOHead';
 import { Appointment } from './types';
 import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
@@ -98,10 +99,17 @@ function App() {
       });
     } catch (error) {
       console.error('Error creating appointment:', error);
+      
+      // Mostrar mensaje específico si es un error de baneo
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      const isBanError = errorMessage.includes('bloqueado') || errorMessage.includes('baneado');
+      
       addNotification({
         type: 'error',
-        title: 'Error',
-        message: 'No se pudo crear el turno. Intenta nuevamente.'
+        title: isBanError ? 'Acceso Bloqueado' : 'Error',
+        message: isBanError 
+          ? errorMessage 
+          : 'No se pudo crear el turno. Intenta nuevamente.'
       });
     }
   };
@@ -162,6 +170,16 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-900 relative">
+      <SEOHead
+        title={view === 'customer' 
+          ? 'WAVE Barbería Premium - Reserva tu Turno Online | Cortes y Diseños'
+          : 'Panel de Administración - WAVE Barbería Premium'
+        }
+        description={view === 'customer'
+          ? 'Reserva tu turno en WAVE Barbería Premium. Cortes clásicos, arreglo de barba y diseños personalizados. Sistema de reservas online fácil y rápido. Abierto viernes y sábados.'
+          : 'Panel de administración de WAVE Barbería Premium. Gestiona turnos, reservas y configuraciones.'
+        }
+      />
       <Header view={view} onViewChange={handleViewChange} />
       
       {/* Back Button - Show when there's navigation history or not on initial customer view */}

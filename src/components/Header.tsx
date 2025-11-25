@@ -34,7 +34,14 @@ export const Header: React.FC<HeaderProps> = ({ view, onViewChange }) => {
                 <circle cx="17.5" cy="6.5" r="1.25" fill="url(#igGradient)" />
               </svg>
             </a>
-            <img src="/WaveBarberIcon.png" alt="Wave icon" className="h-16 w-16 sm:h-18 sm:w-18 object-contain" />
+            <img 
+              src="/WaveBarberIcon.png" 
+              alt="WAVE Barbería Premium - Logo de la barbería" 
+              className="h-16 w-16 sm:h-18 sm:w-18 object-contain"
+              width="64"
+              height="64"
+              loading="eager"
+            />
             <div className="text-center">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-white tracking-tight drop-shadow-lg animate-shimmer">
                 💈𝙒𝘼𝙑𝙀💈

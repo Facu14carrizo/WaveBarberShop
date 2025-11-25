@@ -21,6 +21,7 @@ export interface AppointmentRow {
   time: string
   status: 'confirmed' | 'completed' | 'cancelled' | 'no-show'
   notes?: string
+  ip_address?: string | null // IP del usuario que creó el turno
   created_at: string
   updated_at: string
   deleted_at?: string | null // Fecha de eliminación (null = no eliminado)
