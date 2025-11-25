@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -19,6 +19,7 @@ interface OwnerDashboardProps {
   onRestoreAppointment: (id: string) => Promise<void>;
   onPermanentlyDeleteAppointment: (id: string) => Promise<void>;
   loadDeletedAppointments: () => Promise<Appointment[]>;
+  onRefreshAppointments: () => Promise<void>;
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
@@ -28,7 +29,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   onNewAppointment,
   onRestoreAppointment,
   onPermanentlyDeleteAppointment,
-  loadDeletedAppointments
+  loadDeletedAppointments,
+  onRefreshAppointments
 }) => {
   const SHOW_STATUS = false;
   const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans'>('appointments');
@@ -55,6 +57,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const [currentTime, setCurrentTime] = useState(new Date());
   const [banModalOpen, setBanModalOpen] = useState(false);
   const [appointmentToBan, setAppointmentToBan] = useState<Appointment | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -884,14 +887,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'settings'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
-              <Filter className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-sm sm:text-base">Settings</span>
+              <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
             </button>
             <button
               onClick={() => setActiveTab('trash')}
@@ -922,7 +924,11 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           <BansSection 
             bannedIPs={bannedIPs}
             onUnbanIP={unbanIP}
-            onRefresh={refreshBans}
+            onRefresh={async () => {
+              await refreshBans();
+              // También refrescar turnos para actualizar el estado de baneado
+              await onRefreshAppointments();
+            }}
           />
         ) : activeTab === 'trash' ? (
           <TrashSection 
@@ -949,6 +955,40 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           />
         ) : activeTab === 'appointments' ? (
           <>
+        {/* Botón de refrescar */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={async () => {
+              setRefreshing(true);
+              try {
+                await Promise.all([
+                  onRefreshAppointments(),
+                  refreshBans()
+                ]);
+                addNotification({
+                  type: 'success',
+                  title: 'Actualizado',
+                  message: 'Turnos y baneos actualizados correctamente.'
+                });
+              } catch (error) {
+                console.error('Error refrescando:', error);
+                addNotification({
+                  type: 'error',
+                  title: 'Error',
+                  message: 'No se pudo actualizar. Intenta nuevamente.'
+                });
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+            disabled={refreshing}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span className="text-sm">{refreshing ? 'Actualizando...' : 'Actualizar'}</span>
+          </button>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 md:mb-12">
           <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">

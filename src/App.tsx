@@ -25,7 +25,8 @@ function App() {
     deleteAppointment,
     restoreAppointment,
     permanentlyDeleteAppointment,
-    loadDeletedAppointments
+    loadDeletedAppointments,
+    refresh: refreshAppointments
   } = useSupabaseAppointments();
   const { notifications, addNotification, removeNotification } = useNotifications();
 
@@ -204,6 +205,7 @@ function App() {
           onRestoreAppointment={restoreAppointment}
           onPermanentlyDeleteAppointment={permanentlyDeleteAppointment}
           loadDeletedAppointments={loadDeletedAppointments}
+          onRefreshAppointments={refreshAppointments}
         />
       )}
       
