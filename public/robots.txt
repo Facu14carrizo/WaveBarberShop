@@ -8,3 +8,4 @@ Sitemap: https://wavebarbershop.com/sitemap.xml
 Disallow: /admin
 Disallow: /owner
 
+

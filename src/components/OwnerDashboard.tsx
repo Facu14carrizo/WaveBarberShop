@@ -491,6 +491,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       const isPast = !!d && d.getTime() < now.getTime();
       
       // Verificar si el turno está baneado usando las funciones del hook
+      // bannedIPs.length se usa aquí para que React detecte cambios y re-renderice
       const appointmentIPBanned = appointment.ipAddress ? isIPBanned(appointment.ipAddress) : false;
       const appointmentPhoneBanned = isPhoneBanned(appointment.customerPhone);
       const appointmentEmailBanned = appointment.customerEmail ? isEmailBanned(appointment.customerEmail) : false;
@@ -955,40 +956,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           />
         ) : activeTab === 'appointments' ? (
           <>
-        {/* Botón de refrescar */}
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={async () => {
-              setRefreshing(true);
-              try {
-                await Promise.all([
-                  onRefreshAppointments(),
-                  refreshBans()
-                ]);
-                addNotification({
-                  type: 'success',
-                  title: 'Actualizado',
-                  message: 'Turnos y baneos actualizados correctamente.'
-                });
-              } catch (error) {
-                console.error('Error refrescando:', error);
-                addNotification({
-                  type: 'error',
-                  title: 'Error',
-                  message: 'No se pudo actualizar. Intenta nuevamente.'
-                });
-              } finally {
-                setRefreshing(false);
-              }
-            }}
-            disabled={refreshing}
-            className="flex items-center space-x-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span className="text-sm">{refreshing ? 'Actualizando...' : 'Actualizar'}</span>
-          </button>
-        </div>
-
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8 md:mb-12">
           <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg">
@@ -1092,15 +1059,48 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                 <Calendar className="h-5 w-5 mr-2" />
                 Próximos Turnos ({upcomingAppointments.length})
               </h3>
-              <button
-                onClick={handleUndo}
-                disabled={!lastAction}
-                className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors ${lastAction ? 'bg-gray-700 text-white hover:bg-gray-600 border border-gray-600' : 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'}`}
-                title={lastAction ? 'Deshacer última acción (Ctrl+Z)' : 'Nada que deshacer'}
-              >
-                <RotateCcw className="h-4 w-4" />
-                <span>Deshacer</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={handleUndo}
+                  disabled={!lastAction}
+                  className={`inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors ${lastAction ? 'bg-gray-700 text-white hover:bg-gray-600 border border-gray-600' : 'bg-gray-800 text-gray-500 border border-gray-700 cursor-not-allowed'}`}
+                  title={lastAction ? 'Deshacer última acción (Ctrl+Z)' : 'Nada que deshacer'}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Deshacer</span>
+                </button>
+                <button
+                  onClick={async () => {
+                    setRefreshing(true);
+                    try {
+                      await Promise.all([
+                        onRefreshAppointments(),
+                        refreshBans()
+                      ]);
+                      addNotification({
+                        type: 'success',
+                        title: 'Actualizado',
+                        message: 'Turnos y baneos actualizados correctamente.'
+                      });
+                    } catch (error) {
+                      console.error('Error refrescando:', error);
+                      addNotification({
+                        type: 'error',
+                        title: 'Error',
+                        message: 'No se pudo actualizar. Intenta nuevamente.'
+                      });
+                    } finally {
+                      setRefreshing(false);
+                    }
+                  }}
+                  disabled={refreshing}
+                  className="inline-flex items-center space-x-2 px-3 py-2 rounded-lg text-sm transition-colors bg-gray-700 text-white hover:bg-gray-600 border border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Actualizar turnos y baneos"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  <span>{refreshing ? 'Actualizando...' : 'Actualizar'}</span>
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
               {upcomingAppointments
