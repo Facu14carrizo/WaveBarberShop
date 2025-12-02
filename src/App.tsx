@@ -206,6 +206,7 @@ function App() {
           onPermanentlyDeleteAppointment={permanentlyDeleteAppointment}
           loadDeletedAppointments={loadDeletedAppointments}
           onRefreshAppointments={refreshAppointments}
+          addNotification={addNotification}
         />
       )}
       

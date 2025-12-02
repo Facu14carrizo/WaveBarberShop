@@ -1,6 +1,7 @@
 import { Service } from '../types';
 
-export const services: Service[] = [
+// Servicios por defecto (fallback)
+export const defaultServices: Service[] = [
   {
     id: 'classic-cut',
     name: 'Corte Clásico',
@@ -26,3 +27,6 @@ export const services: Service[] = [
     icon: '🎨'
   }
 ];
+
+// Nota: Para usar servicios, importa y usa el hook useServices desde '../hooks/useServices'
+// Este archivo solo exporta los servicios por defecto como referencia

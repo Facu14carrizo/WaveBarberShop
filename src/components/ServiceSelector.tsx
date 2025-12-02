@@ -1,7 +1,7 @@
 import React from 'react';
 import { Check } from 'lucide-react';
 import { Service } from '../types';
-import { services } from '../data/services';
+import { useServices } from '../hooks/useServices';
 
 interface ServiceSelectorProps {
   selectedService: Service | null;
@@ -12,6 +12,8 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   selectedService,
   onServiceSelect
 }) => {
+  const { services } = useServices();
+
   return (
     <div className="space-y-4">
       <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center">

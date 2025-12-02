@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
 import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
-import { services } from '../data/services';
+import { useServices } from '../hooks/useServices';
 import { Appointment, Service } from '../types';
 import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
@@ -20,6 +20,7 @@ interface OwnerDashboardProps {
   onPermanentlyDeleteAppointment: (id: string) => Promise<void>;
   loadDeletedAppointments: () => Promise<Appointment[]>;
   onRefreshAppointments: () => Promise<void>;
+  addNotification?: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
 }
 
 export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
@@ -30,7 +31,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   onRestoreAppointment,
   onPermanentlyDeleteAppointment,
   loadDeletedAppointments,
-  onRefreshAppointments
+  onRefreshAppointments,
+  addNotification: addNotificationProp
 }) => {
   const SHOW_STATUS = false;
   const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans'>('appointments');
@@ -39,7 +41,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const { ranges } = useSupabaseCustomTimeRanges();
   const { availability } = useDayAvailability();
   const { banIP, banPhone, banEmail, unbanIP, bannedIPs, isIPBanned, isPhoneBanned, isEmailBanned, refresh: refreshBans } = useBans();
-  const { addNotification } = useNotifications();
+  const { addNotification: addNotificationLocal } = useNotifications();
+  const addNotification = addNotificationProp || addNotificationLocal;
   const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -58,6 +61,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const [banModalOpen, setBanModalOpen] = useState(false);
   const [appointmentToBan, setAppointmentToBan] = useState<Appointment | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -70,6 +74,23 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     
     return () => clearTimeout(timeoutId);
   }, []);
+
+  // Cerrar menú al hacer clic fuera
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.menu-container')) {
+        setOpenMenuId(null);
+      }
+    };
+
+    if (openMenuId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [openMenuId]);
 
   // Actualizar el tiempo cada 30 segundos para que los turnos pasados se muevan al historial automáticamente
   React.useEffect(() => {
@@ -513,7 +534,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           : (isPast ? 'text-purple-400' : 'text-purple-300');
       const themeChipClass = theme === 'orange' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' : theme === 'blue' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
       return (
-    <div key={appointment.id} className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300`}>
+    <div key={appointment.id} className={`bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 ${borderClass} hover:shadow-xl transition-all duration-300 relative`}>
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center space-x-3">
           <div className={`rounded-full p-2 ${bgBorderClass} ${isPast ? 'opacity-60' : ''}`}>
@@ -530,22 +551,61 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </div>
           </div>
         </div>
-        <div className={isSobreturno ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
-          {SHOW_STATUS && (
-            <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-              appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
-              appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
-              appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
-              'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-            }`}>
-              {appointment.status === 'confirmed' ? 'Confirmado' :
-               appointment.status === 'completed' ? 'Completado' :
-               appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
-            </div>
-          )}
-          {isSobreturno && (
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">SOBRETURNO</span>
-          )}
+        <div className="flex items-center gap-2">
+          <div className={isSobreturno ? "flex flex-col items-end gap-1" : "flex items-center gap-2"}>
+            {SHOW_STATUS && (
+              <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                appointment.status === 'confirmed' ? 'bg-green-500/20 text-green-300 border border-green-500/30' :
+                appointment.status === 'completed' ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30' :
+                appointment.status === 'cancelled' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+              }`}>
+                {appointment.status === 'confirmed' ? 'Confirmado' :
+                 appointment.status === 'completed' ? 'Completado' :
+                 appointment.status === 'cancelled' ? 'Cancelado' : 'No mostrar'}
+              </div>
+            )}
+            {isSobreturno && (
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-300 border border-orange-500/30">SOBRETURNO</span>
+            )}
+          </div>
+          {/* Botón de menú de 3 puntos */}
+          <div className="relative menu-container">
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenMenuId(openMenuId === appointment.id ? null : appointment.id);
+              }}
+              className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/50 rounded-lg transition-colors duration-200"
+              title="Más opciones"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+            {/* Menú desplegable */}
+            {openMenuId === appointment.id && (
+              <div className="absolute right-0 top-10 z-50 bg-gray-700 border border-gray-600 rounded-lg shadow-xl min-w-[160px] overflow-hidden">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (isBanned) return;
+                    setOpenMenuId(null);
+                    handleBanFromAppointment(appointment);
+                  }}
+                  disabled={isBanned}
+                  className={`w-full flex items-center space-x-2 px-4 py-2.5 text-sm transition-colors duration-200 ${
+                    isBanned
+                      ? 'text-gray-500 cursor-not-allowed'
+                      : 'text-orange-400 hover:bg-orange-500/20'
+                  }`}
+                >
+                  <Ban className="h-4 w-4" />
+                  <span>{isBanned ? 'Ya baneado' : 'Banear'}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -808,26 +868,6 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                     <span className="text-sm">Eliminar</span>
                   </button>
                 </div>
-                <button
-                  onClick={(e) => {
-                    if (isBanned) return; // No hacer nada si ya está baneado
-                    e.preventDefault();
-                    e.stopPropagation();
-                    console.log('Botón Banear clickeado para turno:', appointment.id);
-                    handleBanFromAppointment(appointment);
-                  }}
-                  className={`w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg transition-colors duration-200 ${
-                    isBanned
-                      ? 'bg-red-600/20 text-red-400 border border-red-500/30 cursor-not-allowed'
-                      : 'text-orange-400 hover:bg-orange-500/20 border border-orange-500/30'
-                  }`}
-                  title={isBanned ? 'Este turno ya está baneado' : 'Banear IP, teléfono y email de este turno'}
-                  type="button"
-                  disabled={isBanned}
-                >
-                  <Ban className="h-4 w-4" />
-                  <span className="text-sm">{isBanned ? 'Baneado' : 'Banear'}</span>
-                </button>
               </div>
             </div>
           </div>
@@ -1148,7 +1188,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         )}
         </>
         ) : (
-          <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} />
+          <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} addNotification={addNotification} />
         )}
 
         {/* Modal de Confirmación de Baneo */}
@@ -1163,14 +1203,62 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   );
 };
 
-const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void }> = ({ appointments, onNewAppointment }) => {
+const SettingsSection: React.FC<{ 
+  appointments: Appointment[]; 
+  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addNotification?: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
+}> = ({ appointments, onNewAppointment, addNotification: addNotificationProp }) => {
   const [fridayStart, setFridayStart] = useState('');
   const [fridayEnd, setFridayEnd] = useState('');
   const [saturdayStart, setSaturdayStart] = useState('');
   const [saturdayEnd, setSaturdayEnd] = useState('');
   const { ranges, addRange, deleteRange, loading } = useSupabaseCustomTimeRanges();
-  const { addNotification } = useNotifications();
+  const { addNotification: addNotificationLocal } = useNotifications();
+  const addNotification = addNotificationProp || addNotificationLocal;
   const { availability, updateDayAvailability, loading: availabilityLoading } = useDayAvailability();
+  const { services, updateServicePrice, loading: servicesLoading } = useServices();
+  const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
+
+  // Inicializar precios de edición con los precios actuales
+  useEffect(() => {
+    const initialPrices: Record<string, number> = {};
+    services.forEach(service => {
+      initialPrices[service.id] = service.price;
+    });
+    setEditingPrices(initialPrices);
+  }, [services]);
+
+  const handlePriceChange = (serviceId: string, newPrice: string) => {
+    const price = parseInt(newPrice.replace(/\D/g, ''), 10) || 0;
+    setEditingPrices(prev => ({ ...prev, [serviceId]: price }));
+  };
+
+  const handleSavePrice = async (serviceId: string) => {
+    const newPrice = editingPrices[serviceId];
+    if (newPrice && newPrice > 0) {
+      try {
+        await updateServicePrice(serviceId, newPrice);
+        const serviceName = services.find(s => s.id === serviceId)?.name || 'servicio';
+        addNotification({
+          type: 'success',
+          title: '¡Precio guardado!',
+          message: `El precio de "${serviceName}" se ha actualizado correctamente a $${newPrice.toLocaleString()}`
+        });
+      } catch (error) {
+        addNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'No se pudo actualizar el precio. Intenta nuevamente.'
+        });
+      }
+    } else {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'El precio debe ser mayor a 0'
+      });
+    }
+  };
 
   const stripWeekday = (s: string) => s.replace(/^[a-záéíóúñ]+\s+/i, '').trim();
   const fridayDateLabel = stripWeekday(formatDate(getNextFriday()));
@@ -1436,6 +1524,50 @@ const SettingsSection: React.FC<{ appointments: Appointment[]; onNewAppointment:
         />
         <p className="text-xs text-gray-400 mt-2 text-center">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
       </div>
+
+      {/* Edición de precios de servicios - Al final */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
+        <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+          <Settings className="h-4 w-4 text-green-300 mr-2" />
+          Precios de Servicios
+        </h4>
+        <p className="text-gray-400 text-sm text-center mb-4">
+          Modifica los precios de los servicios. Los cambios se reflejarán inmediatamente para todos los clientes.
+        </p>
+        <div className="space-y-4">
+          {services.map((service) => (
+            <div key={service.id} className="bg-gray-700/50 border border-gray-600 rounded-xl p-4">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">{service.icon}</span>
+                  <div>
+                    <p className="font-semibold text-white">{service.name}</p>
+                    <p className="text-xs text-gray-400">{service.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-gray-300">$</span>
+                    <input
+                      type="text"
+                      value={editingPrices[service.id]?.toLocaleString() || ''}
+                      onChange={(e) => handlePriceChange(service.id, e.target.value)}
+                      className="w-24 px-3 py-2 bg-gray-600 border border-gray-500 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-right"
+                      placeholder="0"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleSavePrice(service.id)}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -1448,12 +1580,20 @@ interface SobreturnoFormProps {
 }
 function SobreturnoForm({ appointments, onNewAppointment, ranges, availability }: SobreturnoFormProps) {
   const [day, setDay] = useState<'friday' | 'saturday'>('friday');
+  const { services } = useServices();
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [time, setTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [additionalNames, setAdditionalNames] = useState<string[]>([]);
   const selectedService: Service | undefined = services.find(s => s.id === serviceId);
+
+  // Actualizar serviceId cuando cambien los servicios
+  useEffect(() => {
+    if (services.length > 0 && (!serviceId || !services.find(s => s.id === serviceId))) {
+      setServiceId(services[0].id);
+    }
+  }, [services, serviceId]);
 
   const buildHalfHours = () => {
     const times: string[] = [];
