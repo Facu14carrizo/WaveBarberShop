@@ -84,12 +84,32 @@ export const calculate24hReminderTime = (appointmentDate: string, appointmentTim
   if (monthIndex === undefined) return new Date().toISOString();
   
   const now = new Date();
-  let year = now.getFullYear();
-  let appointmentDateTime = new Date(year, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const currentYear = now.getFullYear();
   
-  // Si la fecha ya pasó este año, usar el próximo año
-  if (appointmentDateTime.getTime() < now.getTime()) {
-    appointmentDateTime = new Date(year + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  // Crear candidatos para el año actual y el año anterior
+  const candidateThisYear = new Date(currentYear, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const candidateLastYear = new Date(currentYear - 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const candidateNextYear = new Date(currentYear + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  
+  // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
+  const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
+  const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
+  const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
+  
+  // Elegir el candidato más cercano a "ahora"
+  const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
+  
+  // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
+  // y hay uno del año pasado que está más cerca, usar el del año pasado
+  let appointmentDateTime = candidateThisYear;
+  if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
+    appointmentDateTime = candidateLastYear;
+  } else if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
+    appointmentDateTime = candidateNextYear;
+  } else if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
+    appointmentDateTime = candidateLastYear;
+  } else if (diffNextYear < diffThisYear) {
+    appointmentDateTime = candidateNextYear;
   }
   
   // Restar 24 horas (restar 1 día)
@@ -117,12 +137,32 @@ export const calculate2hReminderTime = (appointmentDate: string, appointmentTime
   if (monthIndex === undefined) return new Date().toISOString();
   
   const now = new Date();
-  let year = now.getFullYear();
-  let appointmentDateTime = new Date(year, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const currentYear = now.getFullYear();
   
-  // Si la fecha ya pasó este año, usar el próximo año
-  if (appointmentDateTime.getTime() < now.getTime()) {
-    appointmentDateTime = new Date(year + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  // Crear candidatos para el año actual y el año anterior
+  const candidateThisYear = new Date(currentYear, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const candidateLastYear = new Date(currentYear - 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  const candidateNextYear = new Date(currentYear + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
+  
+  // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
+  const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
+  const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
+  const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
+  
+  // Elegir el candidato más cercano a "ahora"
+  const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
+  
+  // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
+  // y hay uno del año pasado que está más cerca, usar el del año pasado
+  let appointmentDateTime = candidateThisYear;
+  if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
+    appointmentDateTime = candidateLastYear;
+  } else if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
+    appointmentDateTime = candidateNextYear;
+  } else if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
+    appointmentDateTime = candidateLastYear;
+  } else if (diffNextYear < diffThisYear) {
+    appointmentDateTime = candidateNextYear;
   }
   
   // Restar 2 horas

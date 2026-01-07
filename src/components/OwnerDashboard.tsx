@@ -164,16 +164,43 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     if (month == null) return null;
     const [hour, minute] = time.split(':').map(Number);
     const now = currentTime;
-    let year = now.getFullYear();
-    let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
+    const currentYear = now.getFullYear();
     
-    // Heurística mejorada: si la fecha candidata está más de 6 meses en el pasado, 
-    // asumimos que corresponde al próximo año (para turnos recurrentes)
+    // Crear candidatos para el año actual y el año anterior
+    const candidateThisYear = new Date(currentYear, month, day, hour || 0, minute || 0, 0, 0);
+    const candidateLastYear = new Date(currentYear - 1, month, day, hour || 0, minute || 0, 0, 0);
+    const candidateNextYear = new Date(currentYear + 1, month, day, hour || 0, minute || 0, 0, 0);
+    
+    // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
+    const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
+    const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
+    const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
+    
+    // Elegir el candidato más cercano a "ahora"
+    // Pero priorizar: si alguno está en el pasado cercano, usarlo antes que uno muy lejano en el futuro
     const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-    if (candidate.getTime() < now.getTime() - sixMonths) {
-      candidate = new Date(year + 1, month, day, hour || 0, minute || 0, 0, 0);
+    
+    // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
+    // y hay uno del año pasado que está más cerca, usar el del año pasado
+    if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
+      return candidateLastYear;
     }
-    return candidate;
+    
+    // Si el candidato del año actual está muy lejano en el pasado (>6 meses)
+    // usar el del próximo año (para turnos recurrentes)
+    if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
+      return candidateNextYear;
+    }
+    
+    // En otros casos, usar el más cercano en tiempo absoluto
+    if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
+      return candidateLastYear;
+    }
+    if (diffNextYear < diffThisYear) {
+      return candidateNextYear;
+    }
+    
+    return candidateThisYear;
   }
  
   function appointmentCompare(a: Appointment, b: Appointment, dir: 'asc' | 'desc') {
@@ -1797,13 +1824,43 @@ const TrashSection: React.FC<TrashSectionProps> = ({
     if (month == null) return null;
     const [hour, minute] = time.split(':').map(Number);
     const now = new Date();
-    let year = now.getFullYear();
-    let candidate = new Date(year, month, day, hour || 0, minute || 0, 0, 0);
+    const currentYear = now.getFullYear();
+    
+    // Crear candidatos para el año actual y el año anterior
+    const candidateThisYear = new Date(currentYear, month, day, hour || 0, minute || 0, 0, 0);
+    const candidateLastYear = new Date(currentYear - 1, month, day, hour || 0, minute || 0, 0, 0);
+    const candidateNextYear = new Date(currentYear + 1, month, day, hour || 0, minute || 0, 0, 0);
+    
+    // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
+    const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
+    const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
+    const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
+    
+    // Elegir el candidato más cercano a "ahora"
+    // Pero priorizar: si alguno está en el pasado cercano, usarlo antes que uno muy lejano en el futuro
     const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-    if (candidate.getTime() < now.getTime() - sixMonths) {
-      candidate = new Date(year + 1, month, day, hour || 0, minute || 0, 0, 0);
+    
+    // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
+    // y hay uno del año pasado que está más cerca, usar el del año pasado
+    if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
+      return candidateLastYear;
     }
-    return candidate;
+    
+    // Si el candidato del año actual está muy lejano en el pasado (>6 meses)
+    // usar el del próximo año (para turnos recurrentes)
+    if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
+      return candidateNextYear;
+    }
+    
+    // En otros casos, usar el más cercano en tiempo absoluto
+    if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
+      return candidateLastYear;
+    }
+    if (diffNextYear < diffThisYear) {
+      return candidateNextYear;
+    }
+    
+    return candidateThisYear;
   }
 
   return (
