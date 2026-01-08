@@ -9,7 +9,7 @@ interface AppointmentBannerProps {
 
 export const AppointmentBanner: React.FC<AppointmentBannerProps> = ({ appointment, onCancel }) => {
     return (
-        <div className="bg-gradient-to-r from-purple-900/95 to-blue-900/95 border-b border-purple-500/30 backdrop-blur-md shadow-lg sticky top-0 z-40 animate-slide-down">
+        <div className="bg-gradient-to-r from-purple-900/95 to-blue-900/95 border-b border-purple-500/30 backdrop-blur-md shadow-lg sticky top-0 z-50 animate-slide-down">
             <div className="max-w-4xl mx-auto px-4 py-3">
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
                     <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
