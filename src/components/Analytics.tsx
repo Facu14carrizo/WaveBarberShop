@@ -1,5 +1,5 @@
 import React from 'react';
-import { DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Calendar, Clock } from 'lucide-react';
 import { Appointment } from '../types';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, CustomTimeRanges, parseAppointmentDateTime } from '../utils/timeSlots';
@@ -134,12 +134,8 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     if (prevMonthTotal === 0) {
       growthRate = currentMonthTotal > 0 ? 100 : 0;
     } else {
-      // Siempre mostrar crecimiento positivo para motivar
-      growthRate = Math.abs(((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100);
-      // Si no hay crecimiento, mostrar un mínimo motivador
-      if (growthRate === 0 && currentMonthTotal > 0) {
-        growthRate = 5; // Muestra un pequeño crecimiento para mantener motivación
-      }
+      // Cálculo real de crecimiento
+      growthRate = ((currentMonthTotal - prevMonthTotal) / prevMonthTotal) * 100;
     }
 
     const daily = Array.from(dailyMap.entries())
@@ -193,11 +189,19 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       {/* Cards principales */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
-          <div className="bg-green-500/20 border border-green-500/30 rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3">
-            <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" />
+          <div className={`${data.growthRate >= 0 ? 'bg-green-500/20 border-green-500/30' : 'bg-red-500/20 border-red-500/30'} border rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center mx-auto mb-2 sm:mb-3`}>
+            {data.growthRate >= 0 ? (
+              <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-400" />
+            ) : (
+              <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-400" />
+            )}
           </div>
-          <p className="text-xl sm:text-2xl font-bold text-white">{data.growthRate.toFixed(1)}%</p>
-          <p className="text-xs sm:text-sm text-gray-400">Crecimiento mensual</p>
+          <p className={`text-xl sm:text-2xl font-bold ${data.growthRate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {Math.abs(data.growthRate).toFixed(1)}%
+          </p>
+          <p className="text-xs sm:text-sm text-gray-400">
+            {data.growthRate >= 0 ? 'más que el mes pasado' : 'menos que el mes pasado'}
+          </p>
         </div>
 
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center">
