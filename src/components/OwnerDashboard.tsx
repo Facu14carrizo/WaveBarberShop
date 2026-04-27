@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical, DollarSign, Plus, Smile } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -1180,47 +1180,91 @@ const SettingsSection: React.FC<{
   const { addNotification: addNotificationLocal } = useNotifications();
   const addNotification = addNotificationProp || addNotificationLocal;
   const { availability, updateDayAvailability, loading: availabilityLoading } = useDayAvailability();
-  const { services, updateServicePrice, loading: servicesLoading } = useServices();
-  const [editingPrices, setEditingPrices] = useState<Record<string, number>>({});
+  const { services, updateService, createService, loading: servicesLoading } = useServices();
+  const [editingServices, setEditingServices] = useState<Record<string, { name: string; description: string; price: number; duration: number; icon: string; isActive: boolean }>>({});
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [newServiceForm, setNewServiceForm] = useState({ name: '', description: '', price: '', icon: '✂️', duration: '30' });
 
-  // Inicializar precios de edición con los precios actuales
+  // Inicializar datos de edición con los valores actuales
   useEffect(() => {
-    const initialPrices: Record<string, number> = {};
+    const initialData: Record<string, { name: string; description: string; price: number; duration: number; icon: string; isActive: boolean }> = {};
     services.forEach(service => {
-      initialPrices[service.id] = service.price;
+      initialData[service.id] = {
+        name: service.name,
+        description: service.description,
+        price: service.price,
+        duration: service.duration,
+        icon: service.icon,
+        isActive: service.isActive !== false
+      };
     });
-    setEditingPrices(initialPrices);
+    setEditingServices(initialData);
   }, [services]);
 
-  const handlePriceChange = (serviceId: string, newPrice: string) => {
-    const price = parseInt(newPrice.replace(/\D/g, ''), 10) || 0;
-    setEditingPrices(prev => ({ ...prev, [serviceId]: price }));
+  const handleServiceChange = (serviceId: string, field: 'name' | 'description' | 'price' | 'isActive' | 'duration' | 'icon', value: string | boolean) => {
+    setEditingServices(prev => {
+      const current = prev[serviceId] || { name: '', description: '', price: 0, duration: 30, icon: '✂️', isActive: true };
+      if (field === 'price') {
+        const price = parseInt((value as string).replace(/\D/g, ''), 10) || 0;
+        return { ...prev, [serviceId]: { ...current, price } };
+      }
+      if (field === 'duration') {
+        const duration = parseInt((value as string).replace(/\D/g, ''), 10) || 0;
+        return { ...prev, [serviceId]: { ...current, duration } };
+      }
+      if (field === 'isActive') {
+        const isActive = value === true || value === 'true';
+        return { ...prev, [serviceId]: { ...current, isActive } };
+      }
+      return { ...prev, [serviceId]: { ...current, [field]: value } };
+    });
   };
 
-  const handleSavePrice = async (serviceId: string) => {
-    const newPrice = editingPrices[serviceId];
-    if (newPrice && newPrice > 0) {
+  const handleSaveService = async (serviceId: string) => {
+    const updates = editingServices[serviceId];
+    if (updates && updates.price > 0 && updates.name.trim()) {
       try {
-        await updateServicePrice(serviceId, newPrice);
-        const serviceName = services.find(s => s.id === serviceId)?.name || 'servicio';
+        await updateService(serviceId, updates);
         addNotification({
           type: 'success',
-          title: '¡Precio guardado!',
-          message: `El precio de "${serviceName}" se ha actualizado correctamente a $${newPrice.toLocaleString()}`
+          title: '¡Servicio actualizado!',
+          message: `El servicio "${updates.name}" se ha actualizado correctamente.`
         });
       } catch (error) {
         addNotification({
           type: 'error',
           title: 'Error',
-          message: 'No se pudo actualizar el precio. Intenta nuevamente.'
+          message: 'No se pudo actualizar el servicio. Intenta nuevamente.'
         });
       }
     } else {
       addNotification({
         type: 'error',
         title: 'Error',
-        message: 'El precio debe ser mayor a 0'
+        message: 'El nombre no puede estar vacío y el precio debe ser mayor a 0.'
       });
+    }
+  };
+
+  const handleCreateService = async () => {
+    if (!newServiceForm.name.trim() || !newServiceForm.price) {
+      addNotification({ type: 'error', title: 'Error', message: 'Nombre y precio son obligatorios' });
+      return;
+    }
+    try {
+      await createService({
+        name: newServiceForm.name,
+        description: newServiceForm.description,
+        price: parseInt(newServiceForm.price.replace(/\D/g, ''), 10) || 0,
+        icon: newServiceForm.icon,
+        duration: parseInt(newServiceForm.duration, 10) || 30,
+        isActive: true
+      });
+      addNotification({ type: 'success', title: '¡Éxito!', message: 'Servicio creado correctamente' });
+      setIsAddingService(false);
+      setNewServiceForm({ name: '', description: '', price: '', icon: '✂️', duration: '30' });
+    } catch (e) {
+      addNotification({ type: 'error', title: 'Error', message: 'No se pudo crear el servicio' });
     }
   };
 
@@ -1491,41 +1535,198 @@ const SettingsSection: React.FC<{
 
       {/* Edición de precios de servicios - Al final */}
       <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-        <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
-          <Settings className="h-4 w-4 text-green-300 mr-2" />
-          Precios de Servicios
-        </h4>
-        <p className="text-gray-400 text-sm text-center mb-4">
-          Modifica los precios de los servicios. Los cambios se reflejarán inmediatamente para todos los clientes.
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex-1" />
+          <h4 className="text-lg font-bold text-white flex items-center justify-center">
+            <Settings className="h-5 w-5 text-purple-400 mr-2" />
+            Modificar Servicios
+          </h4>
+          <div className="flex-1 flex justify-end">
+            <button
+              onClick={() => setIsAddingService(!isAddingService)}
+              className="p-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all shadow-lg shadow-purple-900/40 active:scale-95"
+              title="Añadir nuevo servicio"
+            >
+              <Plus className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+        <p className="text-gray-400 text-sm text-center mb-6">
+          Configura los detalles de los servicios. Los servicios desactivados no serán visibles para los clientes.
         </p>
+
+        {/* Formulario para añadir servicio */}
+        {isAddingService && (
+          <div className="mb-8 bg-gray-900/60 border-2 border-purple-500/30 rounded-2xl p-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <h5 className="text-white font-bold mb-4 flex items-center">
+              <Plus className="h-4 w-4 text-purple-400 mr-2" />
+              Nuevo Servicio
+            </h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <input
+                type="text"
+                placeholder="Nombre del servicio (ej: Corte + Barba)"
+                value={newServiceForm.name}
+                onChange={(e) => setNewServiceForm({...newServiceForm, name: e.target.value})}
+                className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Precio (ej: 12000)"
+                value={newServiceForm.price}
+                onChange={(e) => setNewServiceForm({...newServiceForm, price: e.target.value})}
+                className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Icono (ej: 💇‍♂️)"
+                value={newServiceForm.icon}
+                onChange={(e) => setNewServiceForm({...newServiceForm, icon: e.target.value})}
+                className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <input
+                type="text"
+                placeholder="Duración en minutos (ej: 30)"
+                value={newServiceForm.duration}
+                onChange={(e) => setNewServiceForm({...newServiceForm, duration: e.target.value})}
+                className="px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none"
+              />
+              <div className="md:col-span-2">
+                <textarea
+                  placeholder="Descripción del servicio..."
+                  value={newServiceForm.description}
+                  onChange={(e) => setNewServiceForm({...newServiceForm, description: e.target.value})}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 outline-none resize-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsAddingService(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCreateService}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-purple-900/40"
+              >
+                Crear Servicio
+              </button>
+            </div>
+          </div>
+        )}
         <div className="space-y-4">
           {services.map((service) => (
-            <div key={service.id} className="bg-gray-700/50 border border-gray-600 rounded-xl p-4">
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl">{service.icon}</span>
-                  <div>
-                    <p className="font-semibold text-white">{service.name}</p>
-                    <p className="text-xs text-gray-400">{service.description}</p>
+            <div key={service.id} className="bg-gray-700/30 border border-gray-600/50 rounded-2xl p-5 sm:p-7 hover:bg-gray-700/40 transition-all group">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Icono Principal y Edición de Emoji */}
+                <div className="lg:col-span-2 flex flex-col items-center justify-start gap-4 pt-1">
+                  <div className="relative group/icon">
+                    <div className="text-4xl bg-gradient-to-br from-gray-800 to-gray-900 p-4 rounded-2xl border border-gray-600/50 shadow-xl transition-transform duration-300">
+                      {editingServices[service.id]?.icon || service.icon}
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-gray-300">$</span>
+                  <div className="w-full">
+                    <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1 block text-center">Emoji</label>
                     <input
                       type="text"
-                      value={editingPrices[service.id]?.toLocaleString() || ''}
-                      onChange={(e) => handlePriceChange(service.id, e.target.value)}
-                      className="w-24 px-3 py-2 bg-gray-600 border border-gray-500 text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-right"
-                      placeholder="0"
+                      value={editingServices[service.id]?.icon || ''}
+                      onChange={(e) => handleServiceChange(service.id, 'icon', e.target.value)}
+                      className="w-full h-10 text-center bg-gray-900/50 border border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-xl"
                     />
                   </div>
-                  <button
-                    onClick={() => handleSavePrice(service.id)}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
-                  >
-                    Guardar
-                  </button>
+                </div>
+
+                {/* Nombre y Descripción */}
+                <div className="lg:col-span-6 space-y-4">
+                  <div className="relative group/input">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-1.5 ml-1 flex items-center">
+                      <User className="h-3 w-3 mr-1.5 text-purple-500/70" />
+                      Nombre del Servicio
+                    </label>
+                    <input
+                      type="text"
+                      value={editingServices[service.id]?.name || ''}
+                      onChange={(e) => handleServiceChange(service.id, 'name', e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all placeholder:text-gray-600 font-medium"
+                      placeholder="Ej: Corte de Pelo"
+                    />
+                  </div>
+                  <div className="relative group/input">
+                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-1.5 ml-1 flex items-center">
+                      <MessageSquare className="h-3 w-3 mr-1.5 text-blue-500/70" />
+                      Descripción Detallada
+                    </label>
+                    <textarea
+                      value={editingServices[service.id]?.description || ''}
+                      onChange={(e) => handleServiceChange(service.id, 'description', e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-3 bg-gray-900/50 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 outline-none transition-all placeholder:text-gray-600 text-sm resize-none leading-relaxed"
+                      placeholder="Describe qué incluye el servicio..."
+                    />
+                  </div>
+                </div>
+
+                {/* Precio, Duración y Acción */}
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="w-full">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-1.5 ml-1 flex items-center">
+                        <DollarSign className="h-3 w-3 mr-1.5 text-green-500/70" />
+                        Precio ($)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
+                        <input
+                          type="text"
+                          value={editingServices[service.id]?.price?.toLocaleString() || ''}
+                          onChange={(e) => handleServiceChange(service.id, 'price', e.target.value)}
+                          className="w-full pl-7 pr-3 py-3 bg-gray-900/50 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-green-500/50 focus:border-green-500 outline-none transition-all text-right font-black text-base"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div className="w-full">
+                      <label className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-1.5 ml-1 flex items-center">
+                        <Clock className="h-3 w-3 mr-1.5 text-blue-500/70" />
+                        Minutos
+                      </label>
+                      <input
+                        type="text"
+                        value={editingServices[service.id]?.duration || ''}
+                        onChange={(e) => handleServiceChange(service.id, 'duration', e.target.value)}
+                        className="w-full px-3 py-3 bg-gray-900/50 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 outline-none transition-all text-center font-black text-base"
+                        placeholder="30"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleSaveService(service.id)}
+                      className="w-full h-[52px] bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all font-black uppercase tracking-wider text-xs shadow-lg shadow-purple-900/40 hover:shadow-purple-500/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Guardar
+                    </button>
+
+                    {/* Switch de Activo/Inactivo debajo del botón */}
+                    <div className="flex items-center justify-between px-3 py-2 bg-gray-900/40 border border-gray-600/30 rounded-xl">
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${editingServices[service.id]?.isActive !== false ? 'text-green-500' : 'text-red-400'}`}>
+                        {editingServices[service.id]?.isActive !== false ? 'Servicio Activo' : 'Servicio Inactivo'}
+                      </span>
+                      <label className="relative inline-flex items-center cursor-pointer scale-90">
+                        <input
+                          type="checkbox"
+                          checked={editingServices[service.id]?.isActive !== false}
+                          onChange={(e) => handleServiceChange(service.id, 'isActive', e.target.checked ? 'true' : 'false')}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500 shadow-inner"></div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

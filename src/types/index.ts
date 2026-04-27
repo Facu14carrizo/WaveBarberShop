@@ -22,6 +22,7 @@ export interface Service {
   price: number;
   description: string;
   icon: string;
+  isActive?: boolean;
 }
 
 export interface TimeSlot {

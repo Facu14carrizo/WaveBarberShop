@@ -2,7 +2,7 @@ import React from 'react';
 import { DollarSign, Calendar, TrendingUp } from 'lucide-react';
 import { Appointment } from '../types';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
-import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, CustomTimeRanges } from '../utils/timeSlots';
+import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, CustomTimeRanges, parseAppointmentDateTime } from '../utils/timeSlots';
 
 interface AnalyticsProps {
   appointments: Appointment[];
@@ -12,63 +12,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
   const { ranges } = useSupabaseCustomTimeRanges();
 
   const data = React.useMemo(() => {
-    const monthIndex: Record<string, number> = {
-      'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
-      'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8, 'octubre': 9,
-      'noviembre': 10, 'diciembre': 11
-    };
-
-    const parseDateTime = (dateLabel: string, time: string) => {
-      const m = dateLabel.match(/(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
-      if (!m) return null;
-      const day = parseInt(m[1], 10);
-      const monthName = m[2].toLowerCase();
-      const monthIdx = monthIndex[monthName];
-      if (monthIdx == null) return null;
-      const [h, mn] = time.split(':').map(Number);
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      
-      // Crear candidatos para el año actual y el año anterior
-      const candidateThisYear = new Date(currentYear, monthIdx, day, h || 0, mn || 0, 0, 0);
-      const candidateLastYear = new Date(currentYear - 1, monthIdx, day, h || 0, mn || 0, 0, 0);
-      const candidateNextYear = new Date(currentYear + 1, monthIdx, day, h || 0, mn || 0, 0, 0);
-      
-      // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
-      const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
-      const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
-      const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
-      
-      // Elegir el candidato más cercano a "ahora"
-      // Pero priorizar: si alguno está en el pasado cercano, usarlo antes que uno muy lejano en el futuro
-      const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-      
-      // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
-      // y hay uno del año pasado que está más cerca, usar el del año pasado
-      if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
-        return candidateLastYear;
-      }
-      
-      // Si el candidato del año actual está muy lejano en el pasado (>6 meses)
-      // usar el del próximo año (para turnos recurrentes)
-      if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
-        return candidateNextYear;
-      }
-      
-      // En otros casos, usar el más cercano en tiempo absoluto
-      if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
-        return candidateLastYear;
-      }
-      if (diffNextYear < diffThisYear) {
-        return candidateNextYear;
-      }
-      
-      return candidateThisYear;
-    };
-
     const isEffectivePast = (a: Appointment) => {
       if (a.status === 'cancelled' || a.status === 'no-show') return false;
-      const dt = parseDateTime(a.date, a.time);
+      const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
       return !!dt && dt.getTime() < Date.now();
     };
 
@@ -88,49 +34,102 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const dailyMap = new Map<string, { monthIdx: number; day: number; total: number; year: number }>();
 
     for (const a of done) {
-      const dt = parseDateTime(a.date, a.time);
+      const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
       if (!dt) continue;
-      const monthName = Object.keys(monthIndex).find(k => monthIndex[k] === dt.getMonth())!;
+      
+      const monthIdx = dt.getMonth();
       const year = dt.getFullYear();
+      const day = dt.getDate();
+      
+      const weekdayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const weekday = weekdayNames[dt.getDay()];
       
       // Agrupar por mes (incluye año para evitar colisiones entre años)
-      const monthKey = `${year}-${monthName}`;
+      const monthKey = `${year}-${monthIdx}`;
       const mPrev = monthlyMap.get(monthKey);
       if (mPrev) {
         mPrev.total += a.service.price;
       } else {
-        monthlyMap.set(monthKey, { idx: dt.getMonth(), total: a.service.price, year: year });
+        monthlyMap.set(monthKey, { idx: monthIdx, total: a.service.price, year: year });
       }
       
       // Agrupar por día (incluye año y mes para evitar colisiones)
-      const dayLabel = `${dt.getDate()} de ${monthName} ${year}`;
+      const dayLabel = `${weekday} ${day}/${monthIdx + 1}/${year}`;
       const dPrev = dailyMap.get(dayLabel);
       if (dPrev) {
         dPrev.total += a.service.price;
       } else {
-        dailyMap.set(dayLabel, { monthIdx: dt.getMonth(), day: dt.getDate(), total: a.service.price, year: year });
+        dailyMap.set(dayLabel, { monthIdx, day, total: a.service.price, year });
       }
     }
 
-    // Agrupar meses del mismo nombre de diferentes años
-    const monthlyAggregated = new Map<string, { idx: number; total: number }>();
-    for (const [monthKey, v] of monthlyMap.entries()) {
-      const monthName = monthKey.split('-')[1]; // Obtener solo el nombre del mes
-      const existing = monthlyAggregated.get(monthName);
+    const monthNames = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+
+    const monthly = Array.from(monthlyMap.entries())
+      .map(([key, v]) => ({ 
+        monthName: `${monthNames[v.idx]} ${v.year}`, 
+        total: v.total, 
+        idx: v.idx, 
+        year: v.year 
+      }))
+      .sort((a, b) => {
+        // Ordenar cronológicamente descendente (más reciente arriba)
+        if (a.year !== b.year) return b.year - a.year;
+        return b.idx - a.idx;
+      });
+
+    // Agrupar por fin de semana
+    const weekendMap = new Map<string, { total: number; start: Date; end: Date }>();
+    for (const a of done) {
+      const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
+      if (!dt) continue;
+      
+      const dayOfWeek = dt.getDay(); // 0=Dom, 1=Lun, ..., 5=Vie, 6=Sab
+      let fridayDate = new Date(dt);
+      
+      // Encontrar el viernes de ese fin de semana
+      if (dayOfWeek === 6) fridayDate.setDate(dt.getDate() - 1);
+      else if (dayOfWeek === 0) fridayDate.setDate(dt.getDate() - 2);
+      else if (dayOfWeek === 5) fridayDate.setDate(dt.getDate());
+      else continue; // No es parte de un finde standard (Vie-Dom)
+      
+      fridayDate.setHours(0, 0, 0, 0);
+      const weekendKey = fridayDate.toISOString().split('T')[0];
+      
+      const existing = weekendMap.get(weekendKey);
       if (existing) {
-        existing.total += v.total;
+        existing.total += a.service.price;
+        if (dt.getTime() > existing.end.getTime()) existing.end = new Date(dt);
+        if (dt.getTime() < existing.start.getTime()) existing.start = new Date(dt);
       } else {
-        monthlyAggregated.set(monthName, { idx: v.idx, total: v.total });
+        weekendMap.set(weekendKey, { 
+          total: a.service.price, 
+          start: new Date(dt), 
+          end: new Date(dt) 
+        });
       }
     }
-    
-    const monthly = Array.from(monthlyAggregated.entries())
-      .map(([monthName, v]) => ({ monthName, total: v.total, idx: v.idx }))
-      .sort((a, b) => a.idx - b.idx);
 
-    const currentMonthTotal = monthly.find(m => m.idx === thisMonthIdx)?.total || 0;
+    const weekends = Array.from(weekendMap.entries())
+      .map(([key, v]) => {
+        const start = v.start;
+        const end = v.end;
+        const weekdayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+        const label = start.getTime() === end.getTime() 
+          ? `${weekdayNames[start.getDay()]} ${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()}`
+          : `${weekdayNames[start.getDay()]} ${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()} - ${weekdayNames[end.getDay()]} ${end.getDate()}/${end.getMonth()+1}/${end.getFullYear()}`;
+        
+        return { label, total: v.total, date: new Date(key) };
+      })
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    const currentMonthTotal = monthly.find(m => m.idx === thisMonthIdx && m.year === now.getFullYear())?.total || 0;
     const prevMonthIdx = (thisMonthIdx + 11) % 12;
-    const prevMonthTotal = monthly.find(m => m.idx === prevMonthIdx)?.total || 0;
+    const prevMonthYear = thisMonthIdx === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    const prevMonthTotal = monthly.find(m => m.idx === prevMonthIdx && m.year === prevMonthYear)?.total || 0;
     let growthRate = 0;
     if (prevMonthTotal === 0) {
       growthRate = currentMonthTotal > 0 ? 100 : 0;
@@ -146,10 +145,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const daily = Array.from(dailyMap.entries())
       .map(([label, v]) => ({ label, ...v }))
       .sort((a, b) => {
-        // Ordenar por año, luego por mes, luego por día
-        if (a.year !== b.year) return a.year - b.year;
-        if (a.monthIdx !== b.monthIdx) return a.monthIdx - b.monthIdx;
-        return a.day - b.day;
+        // Ordenar cronológicamente descendente (más reciente arriba)
+        if (a.year !== b.year) return b.year - a.year;
+        if (a.monthIdx !== b.monthIdx) return b.monthIdx - a.monthIdx;
+        return b.day - a.day;
       });
 
     // Ocupación por día (próximo viernes y sábado)
@@ -181,7 +180,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       }
     } catch {}
 
-    return { totalAppointments, totalCuts, totalRevenue, monthly, daily, friday, saturday, growthRate };
+    return { totalAppointments, totalCuts, totalRevenue, monthly, daily, weekends, friday, saturday, growthRate };
   }, [appointments, ranges]);
 
   return (
@@ -244,48 +243,73 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
         </div>
       </div>
 
-      {/* Ingresos por mes */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-sm sm:max-w-md">
-        <h4 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 flex items-center">
-          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 mr-2" />
-          Ingresos por mes
-        </h4>
-        {data.monthly.length === 0 ? (
-          <p className="text-gray-400 text-sm">Sin datos todavía.</p>
-        ) : (
-          <div className="max-w-sm sm:max-w-md">
-            <div className="space-y-2 sm:space-y-3">
-              {data.monthly.map(m => (
-                <div key={m.monthName} className="flex items-center justify-between">
-                  <span className="text-white font-medium text-sm sm:text-base capitalize">{m.monthName}</span>
-                  <span className="text-blue-300 font-semibold">${m.total.toLocaleString()}</span>
-                </div>
-              ))}
+      {/* Paneles de Ingresos */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {/* Ingresos por mes */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col">
+          <h4 className="text-lg font-bold text-white mb-4 flex items-center">
+            <Calendar className="h-5 w-5 text-blue-400 mr-2" />
+            Ingresos Mensuales
+          </h4>
+          {data.monthly.length === 0 ? (
+            <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3">
+                {data.monthly.map(m => (
+                  <div key={m.monthName} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
+                    <span className="text-gray-300 text-sm sm:text-base">{m.monthName}</span>
+                    <span className="text-blue-300 font-bold">${m.total.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Ingresos por día */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-6 max-w-sm sm:max-w-md">
-        <h4 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 flex items-center">
-          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400 mr-2" />
-          Ingresos por día
-        </h4>
-        {data.daily.length === 0 ? (
-          <p className="text-gray-400 text-sm">Sin datos todavía.</p>
-        ) : (
-          <div className="max-w-sm sm:max-w-md">
-            <div className="space-y-2 sm:space-y-3">
-              {data.daily.map(d => (
-                <div key={d.label} className="flex items-center justify-between">
-                  <span className="text-white font-medium text-sm sm:text-base capitalize">{d.label}</span>
-                  <span className="text-purple-300 font-semibold">${d.total.toLocaleString()}</span>
-                </div>
-              ))}
+        {/* Ingresos por fin de semana */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col">
+          <h4 className="text-lg font-bold text-white mb-4 flex items-center">
+            <TrendingUp className="h-5 w-5 text-green-400 mr-2" />
+            Por Fin de Semana
+          </h4>
+          {data.weekends.length === 0 ? (
+            <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3">
+                {data.weekends.map(w => (
+                  <div key={w.label} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
+                    <span className="text-gray-300 text-sm">{w.label}</span>
+                    <span className="text-green-300 font-bold">${w.total.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+
+        {/* Ingresos por día */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col md:col-span-2 lg:col-span-1">
+          <h4 className="text-lg font-bold text-white mb-4 flex items-center">
+            <Calendar className="h-5 w-5 text-purple-400 mr-2" />
+            Ingresos Diarios
+          </h4>
+          {data.daily.length === 0 ? (
+            <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto pr-2 custom-scrollbar">
+              <div className="space-y-3">
+                {data.daily.map(d => (
+                  <div key={d.label} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
+                    <span className="text-gray-300 text-sm capitalize">{d.label}</span>
+                    <span className="text-purple-300 font-bold">${d.total.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

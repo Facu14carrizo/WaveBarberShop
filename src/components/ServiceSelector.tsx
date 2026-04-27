@@ -13,6 +13,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   onServiceSelect
 }) => {
   const { services } = useServices();
+  const activeServices = services.filter(s => s.isActive !== false);
 
   return (
     <div className="space-y-4">
@@ -21,7 +22,7 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
       </h3>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        {services.map((service) => (
+        {activeServices.map((service) => (
           <button
             key={service.id}
             onClick={() => onServiceSelect(service)}

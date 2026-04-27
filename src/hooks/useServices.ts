@@ -26,7 +26,8 @@ const defaultServices: Service[] = [
     duration: 40,
     price: 12000,
     description: 'Diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
-    icon: '🎨'
+    icon: '🎨',
+    isActive: true
   }
 ];
 
@@ -63,7 +64,8 @@ export function useServices() {
           duration: row.duration,
           price: row.price,
           description: row.description || '',
-          icon: row.icon || ''
+          icon: row.icon || '',
+          isActive: row.is_active !== false // Por defecto true si es null
         }));
         setServices(loadedServices);
       } else {
@@ -79,6 +81,7 @@ export function useServices() {
               price: s.price,
               description: s.description,
               icon: s.icon,
+              is_active: true,
               order_index: index + 1
             })));
         } catch (insertError) {
@@ -117,26 +120,41 @@ export function useServices() {
     };
   }, []);
 
-  // Actualizar precio de un servicio
-  const updateServicePrice = async (serviceId: string, newPrice: number) => {
+  // Actualizar datos de un servicio
+  const updateService = async (serviceId: string, updates: Partial<Service>) => {
     try {
-      // Actualizar estado local inmediatamente
+      console.log('[useServices] Actualizando servicio:', serviceId, updates);
+      
+      // Actualizar estado local inmediatamente para responsividad
       setServices(prevServices =>
         prevServices.map(service =>
-          service.id === serviceId ? { ...service, price: newPrice } : service
+          service.id === serviceId ? { ...service, ...updates } : service
         )
       );
+
+      // Construir el payload de actualización dinámicamente
+      // Esto evita enviar columnas que podrían no existir en la base de datos antigua
+      const payload: any = {
+        updated_at: new Date().toISOString()
+      };
+      
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.description !== undefined) payload.description = updates.description;
+      if (updates.price !== undefined) payload.price = updates.price;
+      if (updates.duration !== undefined) payload.duration = updates.duration;
+      if (updates.icon !== undefined) payload.icon = updates.icon;
+      if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+
+      console.log('[useServices] Payload enviado a Supabase:', payload);
 
       // Actualizar en Supabase
       const { error } = await supabase
         .from('services')
-        .update({ 
-          price: newPrice,
-          updated_at: new Date().toISOString()
-        })
+        .update(payload)
         .eq('id', serviceId);
 
       if (error) {
+        console.error('[useServices] Error de Supabase:', error);
         // Revertir cambio local si falla
         loadServices();
         throw error;
@@ -144,10 +162,39 @@ export function useServices() {
 
       setError(null);
     } catch (err) {
-      console.error('Error updating service price:', err);
-      setError(err instanceof Error ? err.message : 'Error al actualizar precio');
+      console.error('Error updating service:', err);
+      setError(err instanceof Error ? err.message : 'Error al actualizar servicio');
       // Recargar servicios para revertir cambios
       loadServices();
+      throw err;
+    }
+  };
+
+  // Crear un nuevo servicio
+  const createService = async (newService: Omit<Service, 'id'>) => {
+    try {
+      const id = newService.name.toLowerCase().replace(/\s+/g, '-');
+      
+      const { data, error } = await supabase
+        .from('services')
+        .insert([{
+          id,
+          name: newService.name,
+          description: newService.description,
+          price: newService.price,
+          icon: newService.icon,
+          duration: newService.duration || 30,
+          is_active: true,
+          order_index: services.length + 1
+        }])
+        .select();
+
+      if (error) throw error;
+      
+      await loadServices();
+      return data?.[0];
+    } catch (err) {
+      console.error('Error creating service:', err);
       throw err;
     }
   };
@@ -156,7 +203,8 @@ export function useServices() {
     services,
     loading,
     error,
-    updateServicePrice,
+    updateService,
+    createService,
     refresh: loadServices
   };
 }
