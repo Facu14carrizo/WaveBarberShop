@@ -10,6 +10,7 @@ interface AnalyticsProps {
 
 export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
   const { ranges } = useSupabaseCustomTimeRanges();
+  const [metricType, setMetricType] = React.useState<'income' | 'appointments'>('income');
 
   const data = React.useMemo(() => {
     const isEffectivePast = (a: Appointment) => {
@@ -28,38 +29,38 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
     const totalRevenue = done.reduce((sum, a) => sum + a.service.price, 0);
     // Crecimiento mensual (ingresos mes actual vs mes anterior)
     const now = new Date();
-    const thisMonthIdx = now.getMonth();
-
-    const monthlyMap = new Map<string, { idx: number; total: number; year: number }>();
-    const dailyMap = new Map<string, { monthIdx: number; day: number; total: number; year: number }>();
+    const thisMonthIdx = now.getMonth();    // Agrupar por mes
+    const monthlyMap = new Map<string, { idx: number; total: number; count: number; year: number }>();
+    // Agrupar por día
+    const dailyMap = new Map<string, { monthIdx: number; day: number; total: number; count: number; year: number }>();
 
     for (const a of done) {
       const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
       if (!dt) continue;
       
-      const monthIdx = dt.getMonth();
       const year = dt.getFullYear();
+      const monthIdx = dt.getMonth();
       const day = dt.getDate();
-      
-      const weekdayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      const weekday = weekdayNames[dt.getDay()];
-      
-      // Agrupar por mes (incluye año para evitar colisiones entre años)
       const monthKey = `${year}-${monthIdx}`;
+      const weekday = dt.toLocaleDateString('es-AR', { weekday: 'long' });
+
+      // Agrupar por mes
       const mPrev = monthlyMap.get(monthKey);
       if (mPrev) {
         mPrev.total += a.service.price;
+        mPrev.count += 1;
       } else {
-        monthlyMap.set(monthKey, { idx: monthIdx, total: a.service.price, year: year });
+        monthlyMap.set(monthKey, { idx: monthIdx, total: a.service.price, count: 1, year: year });
       }
       
-      // Agrupar por día (incluye año y mes para evitar colisiones)
+      // Agrupar por día
       const dayLabel = `${weekday} ${day}/${monthIdx + 1}/${year}`;
       const dPrev = dailyMap.get(dayLabel);
       if (dPrev) {
         dPrev.total += a.service.price;
+        dPrev.count += 1;
       } else {
-        dailyMap.set(dayLabel, { monthIdx, day, total: a.service.price, year });
+        dailyMap.set(dayLabel, { monthIdx, day, total: a.service.price, count: 1, year });
       }
     }
 
@@ -72,6 +73,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       .map(([key, v]) => ({ 
         monthName: `${monthNames[v.idx]} ${v.year}`, 
         total: v.total, 
+        count: v.count,
         idx: v.idx, 
         year: v.year 
       }))
@@ -82,7 +84,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       });
 
     // Agrupar por fin de semana
-    const weekendMap = new Map<string, { total: number; start: Date; end: Date }>();
+    const weekendMap = new Map<string, { total: number; count: number; start: Date; end: Date }>();
     for (const a of done) {
       const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
       if (!dt) continue;
@@ -102,11 +104,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       const existing = weekendMap.get(weekendKey);
       if (existing) {
         existing.total += a.service.price;
+        existing.count += 1;
         if (dt.getTime() > existing.end.getTime()) existing.end = new Date(dt);
         if (dt.getTime() < existing.start.getTime()) existing.start = new Date(dt);
       } else {
         weekendMap.set(weekendKey, { 
           total: a.service.price, 
+          count: 1,
           start: new Date(dt), 
           end: new Date(dt) 
         });
@@ -122,7 +126,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
           ? `${weekdayNames[start.getDay()]} ${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()}`
           : `${weekdayNames[start.getDay()]} ${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()} - ${weekdayNames[end.getDay()]} ${end.getDate()}/${end.getMonth()+1}/${end.getFullYear()}`;
         
-        return { label, total: v.total, date: new Date(key) };
+        return { label, total: v.total, count: v.count, date: new Date(key) };
       })
       .sort((a, b) => b.date.getTime() - a.date.getTime());
 
@@ -182,7 +186,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
   return (
     <div className="space-y-8">
       {/* Encabezado removido a pedido del usuario */}
-      <div className="text-center">
+      <div className="flex flex-col items-center gap-2">
         <p className="text-gray-400">Resumen de tu barbería</p>
       </div>
 
@@ -247,13 +251,49 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
         </div>
       </div>
 
-      {/* Paneles de Ingresos */}
+      {/* Switch de Métricas - Movido aquí arriba de los paneles */}
+      <div className="flex justify-center mb-[-12px]">
+        <div className="flex bg-gray-800 p-1 rounded-xl border border-gray-700 shadow-xl">
+          <button
+            onClick={() => setMetricType('income')}
+            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+              metricType === 'income' 
+                ? 'bg-purple-600 text-white shadow-lg' 
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4" />
+              Ingresos
+            </div>
+          </button>
+          <button
+            onClick={() => setMetricType('appointments')}
+            className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-bold transition-all ${
+              metricType === 'appointments' 
+                ? 'bg-purple-600 text-white shadow-lg' 
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Turnos
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Paneles de Ingresos / Turnos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Ingresos por mes */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col">
           <h4 className="text-lg font-bold text-white mb-4 flex items-center">
-            <Calendar className="h-5 w-5 text-blue-400 mr-2" />
-            Ingresos Mensuales
+            {metricType === 'income' ? (
+              <DollarSign className="h-5 w-5 text-blue-400 mr-2" />
+            ) : (
+              <Clock className="h-5 w-5 text-blue-400 mr-2" />
+            )}
+            {metricType === 'income' ? 'Ingresos Mensuales' : 'Turnos por Mes'}
           </h4>
           {data.monthly.length === 0 ? (
             <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
@@ -263,7 +303,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
                 {data.monthly.map(m => (
                   <div key={m.monthName} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
                     <span className="text-gray-300 text-sm sm:text-base">{m.monthName}</span>
-                    <span className="text-blue-300 font-bold">${m.total.toLocaleString()}</span>
+                    <span className="text-blue-300 font-bold">
+                      {metricType === 'income' ? `$${m.total.toLocaleString()}` : `${m.count} turnos`}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -274,8 +316,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
         {/* Ingresos por fin de semana */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col">
           <h4 className="text-lg font-bold text-white mb-4 flex items-center">
-            <TrendingUp className="h-5 w-5 text-green-400 mr-2" />
-            Por Fin de Semana
+            {metricType === 'income' ? (
+              <TrendingUp className="h-5 w-5 text-green-400 mr-2" />
+            ) : (
+              <Clock className="h-5 w-5 text-green-400 mr-2" />
+            )}
+            {metricType === 'income' ? 'Por Fin de Semana' : 'Turnos por Finde'}
           </h4>
           {data.weekends.length === 0 ? (
             <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
@@ -285,7 +331,9 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
                 {data.weekends.map(w => (
                   <div key={w.label} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
                     <span className="text-gray-300 text-sm">{w.label}</span>
-                    <span className="text-green-300 font-bold">${w.total.toLocaleString()}</span>
+                    <span className="text-green-300 font-bold">
+                      {metricType === 'income' ? `$${w.total.toLocaleString()}` : `${w.count} turnos`}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -296,8 +344,12 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
         {/* Ingresos por día */}
         <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-4 sm:p-5 flex flex-col md:col-span-2 lg:col-span-1">
           <h4 className="text-lg font-bold text-white mb-4 flex items-center">
-            <Calendar className="h-5 w-5 text-purple-400 mr-2" />
-            Ingresos Diarios
+            {metricType === 'income' ? (
+              <Calendar className="h-5 w-5 text-purple-400 mr-2" />
+            ) : (
+              <Clock className="h-5 w-5 text-purple-400 mr-2" />
+            )}
+            {metricType === 'income' ? 'Ingresos Diarios' : 'Turnos por Día'}
           </h4>
           {data.daily.length === 0 ? (
             <p className="text-gray-400 text-sm italic">Sin datos todavía.</p>
@@ -306,8 +358,10 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
               <div className="space-y-3">
                 {data.daily.map(d => (
                   <div key={d.label} className="flex items-center justify-between border-b border-gray-700/50 pb-2 last:border-0">
-                    <span className="text-gray-300 text-sm capitalize">{d.label}</span>
-                    <span className="text-purple-300 font-bold">${d.total.toLocaleString()}</span>
+                    <span className="text-gray-300 text-sm">{d.label}</span>
+                    <span className="text-purple-300 font-bold">
+                      {metricType === 'income' ? `$${d.total.toLocaleString()}` : `${d.count} turnos`}
+                    </span>
                   </div>
                 ))}
               </div>
