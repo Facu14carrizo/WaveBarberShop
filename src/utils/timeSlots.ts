@@ -158,11 +158,57 @@ export const formatDate = (date: Date): string => {
   return `${weekday} ${day} de ${month}`;
 };
 
-export const isSlotAvailable = (date: string, time: string, appointments: Appointment[]): boolean => {
+export const parseAppointmentDateTime = (dateLabel: string, time: string, createdAt: Date): Date | null => {
+  const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const monthName = m[2].toLowerCase();
+  const monthMap: Record<string, number> = {
+    'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
+    'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8,
+    'octubre': 9, 'noviembre': 10, 'diciembre': 11
+  };
+  const month = monthMap[monthName];
+  if (month == null) return null;
+  const [hour, minute] = time.split(':').map(Number);
+  
+  const dateMonth = month;
+  const createdMonth = createdAt.getMonth();
+  let year = createdAt.getFullYear();
+
+  // Heurística robusta: el año del turno es el año de creación, 
+  // a menos que el mes del turno sea mucho menor que el de creación (wrap-around de fin de año)
+  if (dateMonth < createdMonth && (createdMonth - dateMonth) > 6) {
+    year++;
+  }
+
+  return new Date(year, dateMonth, day, hour || 0, minute || 0, 0, 0);
+};
+
+export const isSlotAvailable = (dateLabel: string, time: string, appointments: Appointment[]): boolean => {
+  // Para comparar correctamente, necesitamos saber para qué año estamos consultando
+  // En la vista de cliente, 'dateLabel' es para el próximo viernes/sábado (año actual o próximo)
+  // Pero aquí no tenemos el 'Date' objeto de la consulta fácilmente sin cambiar la firma.
+  // Sin embargo, podemos usar la lógica de que un turno de hace un año NO debería bloquear un turno de hoy.
+  
+  const now = new Date();
+  
   return !appointments.some(
-    appointment => 
-      appointment.date === date && 
-      appointment.time === time && 
-      appointment.status === 'confirmed'
+    appointment => {
+      if (appointment.date !== dateLabel || appointment.time !== time || appointment.status !== 'confirmed') {
+        return false;
+      }
+      
+      // Si el label coincide, verificar el año usando createdAt
+      const aptDate = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
+      if (!aptDate) return false;
+      
+      // Solo nos importan los turnos que están cerca de "ahora" (mismo año/mes aprox)
+      // O más simple: si el turno es del pasado (más de 1 mes atrás), no bloquea slots futuros.
+      // Pero espera, isSlotAvailable se usa para ver si alguien PUEDE reservar.
+      // Así que solo comparamos contra turnos que NO son pasados.
+      
+      return aptDate.getTime() > (now.getTime() - 24 * 60 * 60 * 1000); // Permitir turnos de hoy
+    }
   );
 };

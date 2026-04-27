@@ -43,7 +43,8 @@ export const sendToMake = async (
         price: appointmentData.service.price
       },
       date: appointmentData.date,
-      time: appointmentData.time
+      time: appointmentData.time,
+      createdAt: appointmentData.createdAt
     });
 
     console.log('✅ Recordatorios programados en Make.com exitosamente');

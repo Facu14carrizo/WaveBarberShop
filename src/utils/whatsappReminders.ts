@@ -1,5 +1,6 @@
 // WhatsApp Reminders System for Wave Barbería
 // Integrates with Make.com webhook and Twilio WhatsApp API
+import { parseAppointmentDateTime } from './timeSlots';
 
 export interface ReminderData {
   customerName: string;
@@ -71,46 +72,10 @@ _Si no podes asistir, avísame con tiempo_ 🙏`;
 /**
  * Calcula la fecha/hora para el recordatorio 24h antes
  */
-export const calculate24hReminderTime = (appointmentDate: string, appointmentTime: string): string => {
-  const [day, month] = appointmentDate.split(' de ');
-  const [hours, minutes] = appointmentTime.split(':');
+export const calculate24hReminderTime = (appointmentDate: string, appointmentTime: string, createdAt: Date): string => {
+  const appointmentDateTime = parseAppointmentDateTime(appointmentDate, appointmentTime, createdAt);
   
-  const monthIndex = {
-    'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
-    'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8, 'octubre': 9,
-    'noviembre': 10, 'diciembre': 11
-  }[month.toLowerCase()];
-  
-  if (monthIndex === undefined) return new Date().toISOString();
-  
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  
-  // Crear candidatos para el año actual y el año anterior
-  const candidateThisYear = new Date(currentYear, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  const candidateLastYear = new Date(currentYear - 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  const candidateNextYear = new Date(currentYear + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  
-  // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
-  const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
-  const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
-  const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
-  
-  // Elegir el candidato más cercano a "ahora"
-  const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-  
-  // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
-  // y hay uno del año pasado que está más cerca, usar el del año pasado
-  let appointmentDateTime = candidateThisYear;
-  if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
-    appointmentDateTime = candidateLastYear;
-  } else if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
-    appointmentDateTime = candidateNextYear;
-  } else if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
-    appointmentDateTime = candidateLastYear;
-  } else if (diffNextYear < diffThisYear) {
-    appointmentDateTime = candidateNextYear;
-  }
+  if (!appointmentDateTime) return new Date().toISOString();
   
   // Restar 24 horas (restar 1 día)
   const reminderTime = new Date(appointmentDateTime.getTime() - (24 * 60 * 60 * 1000));
@@ -124,46 +89,10 @@ export const calculate24hReminderTime = (appointmentDate: string, appointmentTim
 /**
  * Calcula la fecha/hora para el recordatorio 2h antes
  */
-export const calculate2hReminderTime = (appointmentDate: string, appointmentTime: string): string => {
-  const [day, month] = appointmentDate.split(' de ');
-  const [hours, minutes] = appointmentTime.split(':');
+export const calculate2hReminderTime = (appointmentDate: string, appointmentTime: string, createdAt: Date): string => {
+  const appointmentDateTime = parseAppointmentDateTime(appointmentDate, appointmentTime, createdAt);
   
-  const monthIndex = {
-    'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
-    'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8, 'octubre': 9,
-    'noviembre': 10, 'diciembre': 11
-  }[month.toLowerCase()];
-  
-  if (monthIndex === undefined) return new Date().toISOString();
-  
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  
-  // Crear candidatos para el año actual y el año anterior
-  const candidateThisYear = new Date(currentYear, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  const candidateLastYear = new Date(currentYear - 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  const candidateNextYear = new Date(currentYear + 1, monthIndex, parseInt(day), parseInt(hours), parseInt(minutes), 0, 0);
-  
-  // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
-  const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
-  const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
-  const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
-  
-  // Elegir el candidato más cercano a "ahora"
-  const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-  
-  // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
-  // y hay uno del año pasado que está más cerca, usar el del año pasado
-  let appointmentDateTime = candidateThisYear;
-  if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
-    appointmentDateTime = candidateLastYear;
-  } else if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
-    appointmentDateTime = candidateNextYear;
-  } else if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
-    appointmentDateTime = candidateLastYear;
-  } else if (diffNextYear < diffThisYear) {
-    appointmentDateTime = candidateNextYear;
-  }
+  if (!appointmentDateTime) return new Date().toISOString();
   
   // Restar 2 horas
   const reminderTime = new Date(appointmentDateTime.getTime() - (2 * 60 * 60 * 1000));
@@ -180,6 +109,7 @@ export const sendScheduledReminders = async (appointment: {
   service: { name: string; price: number };
   date: string;
   time: string;
+  createdAt: Date;
 }): Promise<void> => {
   try {
     const reminders = [
@@ -203,7 +133,7 @@ export const sendScheduledReminders = async (appointment: {
         time: appointment.time,
         price: appointment.service.price,
         reminderType: '24h_reminder' as const,
-        scheduledFor: calculate24hReminderTime(appointment.date, appointment.time)
+        scheduledFor: calculate24hReminderTime(appointment.date, appointment.time, appointment.createdAt)
       },
       // Recordatorio 2h antes
       {
@@ -214,7 +144,7 @@ export const sendScheduledReminders = async (appointment: {
         time: appointment.time,
         price: appointment.service.price,
         reminderType: '2h_reminder' as const,
-        scheduledFor: calculate2hReminderTime(appointment.date, appointment.time)
+        scheduledFor: calculate2hReminderTime(appointment.date, appointment.time, appointment.createdAt)
       }
     ];
 

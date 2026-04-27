@@ -3,7 +3,7 @@ import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarCh
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
-import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable } from '../utils/timeSlots';
+import { getAvailableDays, generateTimeSlots, CustomTimeRanges, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, parseAppointmentDateTime } from '../utils/timeSlots';
 import { useServices } from '../hooks/useServices';
 import { Appointment, Service } from '../types';
 import { buildWhatsAppLink } from '../utils/phone';
@@ -119,7 +119,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     }
   }, [activeTab, loadDeletedAppointments]);
   const filteredAppointments = appointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     const isFri = !!d && d.getDay() === 5;
     const isSat = !!d && d.getDay() === 6;
     const isSobreturno = apt.time.endsWith(':30');
@@ -139,73 +139,10 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const confirmedAppointments = filteredAppointments.filter(apt => apt.status === 'confirmed');
   // Helper para comparar fecha y hora en formato de turno
   // Función para parsear la fecha ("viernes 14 de junio") + time --> Date
-  function parseAppointmentDateTime(dateLabel: string, time: string) {
-    // Formato esperado: "viernes 14 de junio" (sin año)
-    const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
-    if (!m) return null;
-    const day = parseInt(m[1], 10);
-    const monthName = m[2].toLowerCase();
-    const monthMap: Record<string, number> = {
-      'enero': 0,
-      'febrero': 1,
-      'marzo': 2,
-      'abril': 3,
-      'mayo': 4,
-      'junio': 5,
-      'julio': 6,
-      'agosto': 7,
-      'septiembre': 8,
-      'setiembre': 8, // variante común
-      'octubre': 9,
-      'noviembre': 10,
-      'diciembre': 11
-    };
-    const month = monthMap[monthName];
-    if (month == null) return null;
-    const [hour, minute] = time.split(':').map(Number);
-    const now = currentTime;
-    const currentYear = now.getFullYear();
-    
-    // Crear candidatos para el año actual y el año anterior
-    const candidateThisYear = new Date(currentYear, month, day, hour || 0, minute || 0, 0, 0);
-    const candidateLastYear = new Date(currentYear - 1, month, day, hour || 0, minute || 0, 0, 0);
-    const candidateNextYear = new Date(currentYear + 1, month, day, hour || 0, minute || 0, 0, 0);
-    
-    // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
-    const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
-    const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
-    const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
-    
-    // Elegir el candidato más cercano a "ahora"
-    // Pero priorizar: si alguno está en el pasado cercano, usarlo antes que uno muy lejano en el futuro
-    const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-    
-    // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
-    // y hay uno del año pasado que está más cerca, usar el del año pasado
-    if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
-      return candidateLastYear;
-    }
-    
-    // Si el candidato del año actual está muy lejano en el pasado (>6 meses)
-    // usar el del próximo año (para turnos recurrentes)
-    if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
-      return candidateNextYear;
-    }
-    
-    // En otros casos, usar el más cercano en tiempo absoluto
-    if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
-      return candidateLastYear;
-    }
-    if (diffNextYear < diffThisYear) {
-      return candidateNextYear;
-    }
-    
-    return candidateThisYear;
-  }
  
   function appointmentCompare(a: Appointment, b: Appointment, dir: 'asc' | 'desc') {
-    const da = parseAppointmentDateTime(a.date, a.time);
-    const db = parseAppointmentDateTime(b.date, b.time);
+    const da = parseAppointmentDateTime(a.date, a.time, a.createdAt);
+    const db = parseAppointmentDateTime(b.date, b.time, b.createdAt);
     if (!da || !db) return 0;
     const now = currentTime;
     const isSameDay = (d1: Date, d2: Date) => d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
@@ -231,7 +168,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   // Turnos de hoy separados en pasados y futuros
   const todayAppointments = confirmedAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     if (!d) return false;
     const now = currentTime;
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
@@ -239,31 +176,31 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   // Turnos de hoy que ya pasaron
   const todayPastAppointments = todayAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     return !!d && d.getTime() < currentTime.getTime();
   }).sort((a, b) => {
-    const da = parseAppointmentDateTime(a.date, a.time);
-    const db = parseAppointmentDateTime(b.date, b.time);
+    const da = parseAppointmentDateTime(a.date, a.time, a.createdAt);
+    const db = parseAppointmentDateTime(b.date, b.time, b.createdAt);
     if (!da || !db) return 0;
     // Orden descendente: más recientes primero (mayor fecha primero)
     return db.getTime() - da.getTime();
   });
 
   const todayFutureAppointments = todayAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     return !!d && d.getTime() >= currentTime.getTime();
   }).sort((a, b) => appointmentCompare(a, b, sortDir));
 
   // Todos los turnos pasados (incluyendo los de hoy que ya pasaron)
   // Ordenados: más recientes arriba, más antiguos abajo
   const pastAppointments = confirmedAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     if (!d) return false;
     // Incluir todos los turnos pasados (incluyendo los de hoy)
     return d.getTime() < currentTime.getTime();
   }).sort((a, b) => {
-    const da = parseAppointmentDateTime(a.date, a.time);
-    const db = parseAppointmentDateTime(b.date, b.time);
+    const da = parseAppointmentDateTime(a.date, a.time, a.createdAt);
+    const db = parseAppointmentDateTime(b.date, b.time, b.createdAt);
     if (!da || !db) return 0;
     // Orden descendente: más recientes primero (mayor fecha primero)
     return db.getTime() - da.getTime();
@@ -271,7 +208,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   // Turnos futuros (no de hoy, y que no sean pasados)
   const upcomingAppointments = confirmedAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     if (!d) return false;
     const now = currentTime;
     const isToday = d.getFullYear() === now.getFullYear() && 
@@ -283,14 +220,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   // Turnos realmente futuros (desde ahora): incluye los que faltan hoy y los de días siguientes
   const futureAppointments = confirmedAppointments.filter(apt => {
-    const d = parseAppointmentDateTime(apt.date, apt.time);
+    const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
     return !!d && d.getTime() > currentTime.getTime();
   });
 
   const handleEditStart = (appointment: Appointment) => {
     setEditingId(appointment.id);
     // Determinar si es viernes o sábado basándome en la fecha
-    const d = parseAppointmentDateTime(appointment.date, appointment.time);
+    const d = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
     const dayType = d?.getDay() === 5 ? 'friday' : d?.getDay() === 6 ? 'saturday' : 'friday';
     setEditForm({
       customerName: appointment.customerName,
@@ -531,7 +468,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const renderAppointmentCard = (appointment: Appointment, isToday: boolean) => (
     (() => {
       const isSobreturno = appointment.time.endsWith(':30');
-      const d = parseAppointmentDateTime(appointment.date, appointment.time);
+      const d = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
       const dayIdx = d ? d.getDay() : 6; // 5=viernes, 6=sábado
       // Mapeo de colores por día: viernes -> azul, sábado -> violeta
       const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
@@ -1810,58 +1747,6 @@ const TrashSection: React.FC<TrashSectionProps> = ({
     }
   };
 
-  function parseAppointmentDateTime(dateLabel: string, time: string) {
-    const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
-    if (!m) return null;
-    const day = parseInt(m[1], 10);
-    const monthName = m[2].toLowerCase();
-    const monthMap: Record<string, number> = {
-      'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
-      'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8,
-      'octubre': 9, 'noviembre': 10, 'diciembre': 11
-    };
-    const month = monthMap[monthName];
-    if (month == null) return null;
-    const [hour, minute] = time.split(':').map(Number);
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    
-    // Crear candidatos para el año actual y el año anterior
-    const candidateThisYear = new Date(currentYear, month, day, hour || 0, minute || 0, 0, 0);
-    const candidateLastYear = new Date(currentYear - 1, month, day, hour || 0, minute || 0, 0, 0);
-    const candidateNextYear = new Date(currentYear + 1, month, day, hour || 0, minute || 0, 0, 0);
-    
-    // Calcular la diferencia absoluta de tiempo desde ahora para cada candidato
-    const diffThisYear = Math.abs(candidateThisYear.getTime() - now.getTime());
-    const diffLastYear = Math.abs(candidateLastYear.getTime() - now.getTime());
-    const diffNextYear = Math.abs(candidateNextYear.getTime() - now.getTime());
-    
-    // Elegir el candidato más cercano a "ahora"
-    // Pero priorizar: si alguno está en el pasado cercano, usarlo antes que uno muy lejano en el futuro
-    const sixMonths = 6 * 30 * 24 * 60 * 60 * 1000;
-    
-    // Si el candidato del año actual está muy lejano en el futuro (>6 meses) 
-    // y hay uno del año pasado que está más cerca, usar el del año pasado
-    if (candidateThisYear.getTime() > now.getTime() + sixMonths && diffLastYear < diffThisYear) {
-      return candidateLastYear;
-    }
-    
-    // Si el candidato del año actual está muy lejano en el pasado (>6 meses)
-    // usar el del próximo año (para turnos recurrentes)
-    if (candidateThisYear.getTime() < now.getTime() - sixMonths) {
-      return candidateNextYear;
-    }
-    
-    // En otros casos, usar el más cercano en tiempo absoluto
-    if (diffLastYear < diffThisYear && diffLastYear < diffNextYear) {
-      return candidateLastYear;
-    }
-    if (diffNextYear < diffThisYear) {
-      return candidateNextYear;
-    }
-    
-    return candidateThisYear;
-  }
 
   return (
     <div className="mb-6 sm:mb-8 md:mb-12">
@@ -1888,7 +1773,7 @@ const TrashSection: React.FC<TrashSectionProps> = ({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
           {deletedAppointments.map((appointment) => {
-            const d = parseAppointmentDateTime(appointment.date, appointment.time);
+            const d = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
             const isSobreturno = appointment.time.endsWith(':30');
             const dayIdx = d ? d.getDay() : 6;
             const theme = isSobreturno ? 'orange' : (dayIdx === 5 ? 'blue' : 'purple');
