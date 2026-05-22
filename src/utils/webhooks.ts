@@ -20,8 +20,7 @@ export interface AppointmentWebhookData {
   notes?: string;
 }
 
-// URL del webhook de Make.com
-const MAKE_WEBHOOK_URL = 'https://hook.us1.make.com/cnc77ml1ija6o1nxx6y1vcsbciwbcwbk';
+import { getMakeWebhookUrl } from '../lib/supabase';
 
 // Función para enviar datos a Make.com
 export const sendToMake = async (

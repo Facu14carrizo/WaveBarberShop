@@ -3,22 +3,29 @@ import { Header } from './components/Header';
 import { CustomerView } from './components/CustomerView';
 import { OwnerDashboard } from './components/OwnerDashboard';
 import { NotificationToast } from './components/NotificationToast';
-import { PinAuthModal } from './components/PinAuthModal';
+import { AdminLoginModal } from './components/AdminLoginModal';
+import { useAdminAuth } from './contexts/AdminAuthContext';
+import { supabase } from './lib/supabase';
 import { BackButton } from './components/BackButton';
 import { BackgroundMusic } from './components/BackgroundMusic';
 import { AppointmentBanner } from './components/AppointmentBanner';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { SEOHead } from './components/SEOHead';
+import { DeveloperCredits } from './components/DeveloperCredits';
 import { Appointment, Service } from './types';
 import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
 import { scheduleReminders } from './utils/webhooks';
-import './utils/testWhatsApp'; // Funciones de prueba para WhatsApp
+
+if (import.meta.env.DEV) {
+  void import('./utils/testWhatsApp');
+}
 
 function App() {
+  const { isAdmin, signIn, signOut } = useAdminAuth();
+  const [adminAllowed, setAdminAllowed] = useState(false);
   const [view, setView] = useState<'customer' | 'owner'>('customer');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [navigationStack, setNavigationStack] = useState<('customer' | 'owner')[]>(['customer']);
   const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -38,6 +45,21 @@ function App() {
     refresh: refreshAppointments
   } = useSupabaseAppointments();
   const { notifications, addNotification, removeNotification } = useNotifications();
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setAdminAllowed(false);
+      return;
+    }
+    supabase.rpc('is_barber_admin').then(({ data, error }) => {
+      if (error || !data) {
+        void signOut();
+        setAdminAllowed(false);
+      } else {
+        setAdminAllowed(true);
+      }
+    });
+  }, [isAdmin, signOut]);
 
   // Check for upcoming appointment on load and when appointments change
   useEffect(() => {
@@ -72,8 +94,8 @@ function App() {
   }, [appointments]);
 
   const handleViewChange = (newView: 'customer' | 'owner') => {
-    if (newView === 'owner' && !isAuthenticated) {
-      setShowPinModal(true);
+    if (newView === 'owner' && !adminAllowed) {
+      setShowLoginModal(true);
     } else {
       setNavigationStack(prev => [...prev, newView]);
       setView(newView);
@@ -86,11 +108,22 @@ function App() {
     }
   };
 
-  const handlePinSuccess = () => {
-    setIsAuthenticated(true);
+  const handleAdminLoginSuccess = async () => {
+    const { data: allowed, error } = await supabase.rpc('is_barber_admin');
+    if (error || !allowed) {
+      await signOut();
+      setShowLoginModal(false);
+      addNotification({
+        type: 'error',
+        title: 'Acceso denegado',
+        message: 'Tu cuenta no está autorizada para el panel. Contactá al administrador.',
+      });
+      return;
+    }
+    setAdminAllowed(true);
     setNavigationStack(prev => [...prev, 'owner']);
     setView('owner');
-    setShowPinModal(false);
+    setShowLoginModal(false);
     // Force immediate scroll to top
     window.scrollTo(0, 0);
     // Also try with smooth behavior as backup
@@ -99,8 +132,8 @@ function App() {
     }, 0);
   };
 
-  const handlePinCancel = () => {
-    setShowPinModal(false);
+  const handleLoginCancel = () => {
+    setShowLoginModal(false);
   };
 
 
@@ -114,22 +147,19 @@ function App() {
 
       // If going back from owner view, reset authentication
       if (view === 'owner' && previousView === 'customer') {
-        setIsAuthenticated(false);
+        void signOut();
+        setAdminAllowed(false);
       }
     } else {
-      // If no history, go to customer view
       setView('customer');
       setNavigationStack(['customer']);
-      setIsAuthenticated(false);
+      void signOut();
+      setAdminAllowed(false);
     }
   };
   const handleNewAppointment = async (appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      const appointmentWithId = {
-        ...appointmentData,
-        id: Math.random().toString(36).substr(2, 9)
-      };
-      const newAppointment = await addAppointment(appointmentWithId);
+      const newAppointment = await addAppointment(appointmentData);
 
       // Save ID to local storage for reminder
       localStorage.setItem('upcoming_appointment_id', newAppointment.id);
@@ -232,7 +262,7 @@ function App() {
 
     setIsCancelling(true);
     try {
-      await deleteAppointment(upcomingAppointment.id);
+      await deleteAppointment(upcomingAppointment.id, upcomingAppointment.customerPhone);
       localStorage.removeItem('upcoming_appointment_id');
       setUpcomingAppointment(null);
 
@@ -328,10 +358,11 @@ function App() {
       </div>
 
       {/* PIN Authentication Modal */}
-      {showPinModal && (
-        <PinAuthModal
-          onSuccess={handlePinSuccess}
-          onCancel={handlePinCancel}
+      {showLoginModal && (
+        <AdminLoginModal
+          signIn={signIn}
+          onSuccess={handleAdminLoginSuccess}
+          onCancel={handleLoginCancel}
         />
       )}
 
@@ -348,6 +379,7 @@ function App() {
       {/* Background Music */}
       <BackgroundMusic />
 
+      <DeveloperCredits />
     </div>
   );
 }

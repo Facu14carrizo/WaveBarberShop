@@ -1,11 +1,30 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Configuración de Supabase
-// Reemplaza estas variables con tus credenciales de Supabase
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'TU_SUPABASE_URL_AQUI'
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'TU_SUPABASE_ANON_KEY_AQUI'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error(
+    '[Supabase] Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY. Copiá .env.example a .env'
+  )
+}
+
+export const supabase = createClient(
+  supabaseUrl || '',
+  supabaseAnonKey || '',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  }
+)
+
+export const getMakeWebhookUrl = (): string | null => {
+  const url = import.meta.env.VITE_MAKE_WEBHOOK_URL
+  return url && url.startsWith('https://') ? url : null
+}
 
 // Tipos para TypeScript
 export interface AppointmentRow {
@@ -21,18 +40,25 @@ export interface AppointmentRow {
   time: string
   status: 'confirmed' | 'completed' | 'cancelled' | 'no-show'
   notes?: string
-  ip_address?: string | null // IP del usuario que creó el turno
+  ip_address?: string | null
   created_at: string
   updated_at: string
-  deleted_at?: string | null // Fecha de eliminación (null = no eliminado)
+  deleted_at?: string | null
+}
+
+export interface PublicAppointmentSlotRow {
+  id: string
+  date: string
+  time: string
+  status: string
+  created_at: string
+  service_duration: number
 }
 
 export interface CustomTimeRangeRow {
   id: string
   day: 'friday' | 'saturday'
-  start: string // HH:mm
-  end: string   // HH:mm
+  start: string
+  end: string
   created_at?: string
 }
-
-

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Phone, User, Calendar, Clock, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Appointment, Service } from '../types';
+import { validateBookingForm, LIMITS } from '../utils/validation';
 // Los recordatorios se manejan automáticamente en App.tsx
 
 interface BookingFormProps {
@@ -24,20 +25,33 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showPolicies, setShowPolicies] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
+
+    const validation = validateBookingForm({
+      customerName,
+      customerPhone,
+      additionalNames,
+    });
+
+    if (!validation.ok) {
+      setFormError(validation.message);
+      return;
+    }
+
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 300));
 
     const appointment: Omit<Appointment, 'id' | 'createdAt'> = {
       date: selectedDate,
       time: selectedTime,
-      customerName,
-      additionalCustomerNames: additionalNames,
-      customerPhone,
+      customerName: validation.data.customerName,
+      additionalCustomerNames: validation.data.additionalNames,
+      customerPhone: validation.data.customerPhone,
       service: selectedService,
       status: 'confirmed',
       updatedAt: new Date(),
@@ -139,6 +153,8 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   className="w-full pl-9 sm:pl-10 pr-10 sm:pr-12 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
                   placeholder="Ingresa tu nombre"
                   required
+                  maxLength={LIMITS.customerName}
+                  autoComplete="name"
                 />
                 {/* Botón para agregar personas */}
                 <button
@@ -168,6 +184,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                     }}
                     className="w-full pl-9 sm:pl-10 pr-9 sm:pr-10 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
                     placeholder={`Nombre adicional ${idx + 1}`}
+                    maxLength={LIMITS.companionName}
                   />
                   <button
                     type="button"
@@ -198,6 +215,9 @@ export const BookingForm: React.FC<BookingFormProps> = ({
                   className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2.5 sm:py-3 bg-gray-800 border border-gray-600 text-white rounded-lg sm:rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 placeholder-gray-400 text-sm sm:text-base"
                   placeholder="Ej: 11 1234-5678"
                   required
+                  maxLength={LIMITS.phone}
+                  autoComplete="tel"
+                  inputMode="tel"
                 />
               </div>
             </div>
@@ -225,6 +245,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               </ul>
             )}
           </div>
+
+          {formError && (
+            <p className="text-red-400 text-sm text-center" role="alert">
+              {formError}
+            </p>
+          )}
 
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
             <button

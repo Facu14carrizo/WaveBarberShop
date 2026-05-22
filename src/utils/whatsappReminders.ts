@@ -13,8 +13,9 @@ export interface ReminderData {
   scheduledFor?: string; // ISO string for scheduled reminders
 }
 
-// Webhook URL de Make.com
-const MAKE_WEBHOOK_URL = 'https://hook.us1.make.com/cnc77ml1ija6o1nxx6y1vcsbciwbcwbk';
+import { getMakeWebhookUrl } from '../lib/supabase';
+
+const getWebhookUrl = (): string | null => getMakeWebhookUrl();
 
 // Las credenciales de Twilio se configuran directamente en Make.com
 
@@ -149,7 +150,10 @@ export const sendScheduledReminders = async (appointment: {
     ];
 
     // Enviar a Make.com
-    const response = await fetch(MAKE_WEBHOOK_URL, {
+    const webhookUrl = getWebhookUrl();
+    if (!webhookUrl) return;
+
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -187,7 +191,10 @@ export const sendTestReminder = async (phone: string, customerName: string): Pro
   };
 
   try {
-    const response = await fetch(MAKE_WEBHOOK_URL, {
+    const webhookUrl = getWebhookUrl();
+    if (!webhookUrl) return;
+
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

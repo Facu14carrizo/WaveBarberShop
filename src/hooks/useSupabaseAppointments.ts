@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
-import { supabase, AppointmentRow } from '../lib/supabase'
+import { useState, useEffect, useCallback } from 'react'
+import { supabase, AppointmentRow, PublicAppointmentSlotRow } from '../lib/supabase'
 import { Appointment } from '../types'
 import { getUserIP } from './useBans'
+import { useAdminAuth } from '../contexts/AdminAuthContext'
+import { normalizePhoneDigits } from '../utils/validation'
 
 // Marcador para acompañantes dentro de notes
 const COMPANIONS_MARK = '::ACOMP::'
@@ -22,6 +24,25 @@ const parseNotes = (notes?: string): { companions: string[]; cleanNotes?: string
   }
   return { companions: [], cleanNotes: notes }
 }
+
+const slotRowToAppointment = (row: PublicAppointmentSlotRow): Appointment => ({
+  id: row.id,
+  customerName: '',
+  customerPhone: '',
+  service: {
+    id: '',
+    name: '',
+    price: 0,
+    duration: row.service_duration || 60,
+    icon: '',
+    description: '',
+  },
+  date: row.date,
+  time: row.time,
+  status: (row.status as Appointment['status']) || 'confirmed',
+  createdAt: new Date(row.created_at),
+  updatedAt: new Date(row.created_at),
+})
 
 // Función para convertir de AppointmentRow (Supabase) a Appointment (app)
 const convertToAppointment = (row: AppointmentRow): Appointment => {
@@ -85,43 +106,28 @@ const convertToRow = (
 }
 
 export const useSupabaseAppointments = () => {
+  const { isAdmin } = useAdminAuth()
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Cargar turnos al inicializar
-  useEffect(() => {
-    loadAppointments()
-  }, [])
-
-  // Suscribirse a cambios en tiempo real
-  useEffect(() => {
-    const channel = supabase
-      .channel('appointments_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'appointments'
-        },
-        () => {
-          // Recargar turnos cuando hay cambios
-          loadAppointments()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [])
-
-  const loadAppointments = async () => {
+  const loadAppointments = useCallback(async () => {
     try {
       setLoading(true)
-      
-      // Primero intentar cargar con el filtro de deleted_at
+
+      if (!isAdmin) {
+        const { data, error: rpcError } = await supabase.rpc('get_public_appointment_slots')
+        if (rpcError) {
+          throw new Error(
+            'No se pudieron cargar los horarios. Ejecutá supabase/security_setup.sql en Supabase.'
+          )
+        }
+        setAppointments((data as PublicAppointmentSlotRow[])?.map(slotRowToAppointment) || [])
+        setError(null)
+        return
+      }
+
+      // Admin: acceso completo
       let query = supabase
         .from('appointments')
         .select('*')
@@ -143,10 +149,6 @@ export const useSupabaseAppointments = () => {
             if (allError) throw allError
             
             const convertedAppointments = allData?.map(convertToAppointment) || []
-            console.log('[loadAppointments] Turnos cargados (sin filtro):', convertedAppointments.length);
-            // Log de IPs para debugging
-            const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
-            console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
             setAppointments(convertedAppointments)
             setError(null)
             return
@@ -155,10 +157,6 @@ export const useSupabaseAppointments = () => {
         }
         
         const convertedAppointments = data?.map(convertToAppointment) || []
-        console.log('[loadAppointments] Turnos cargados:', convertedAppointments.length);
-        // Log de IPs para debugging
-        const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
-        console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
         setAppointments(convertedAppointments)
         setError(null)
       } catch (filterError: any) {
@@ -172,10 +170,6 @@ export const useSupabaseAppointments = () => {
         if (allError) throw allError
         
         const convertedAppointments = allData?.map(convertToAppointment) || []
-        console.log('[loadAppointments] Turnos cargados (fallback):', convertedAppointments.length);
-        // Log de IPs para debugging
-        const appointmentsWithIP = convertedAppointments.filter(apt => apt.ipAddress);
-        console.log('[loadAppointments] Turnos con IP:', appointmentsWithIP.length, appointmentsWithIP.map(apt => ({ id: apt.id, ip: apt.ipAddress })));
         setAppointments(convertedAppointments)
         setError(null)
       }
@@ -185,10 +179,32 @@ export const useSupabaseAppointments = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isAdmin])
+
+  useEffect(() => {
+    loadAppointments()
+  }, [loadAppointments])
+
+  useEffect(() => {
+    if (!isAdmin) return
+
+    const channel = supabase
+      .channel('appointments_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'appointments' },
+        () => loadAppointments()
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [isAdmin, loadAppointments])
 
   // Cargar turnos eliminados (papelera)
   const loadDeletedAppointments = async (): Promise<Appointment[]> => {
+    if (!isAdmin) return [];
     try {
       // Intentar cargar turnos eliminados
       const { data, error } = await supabase
@@ -216,172 +232,58 @@ export const useSupabaseAppointments = () => {
 
   const addAppointment = async (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
-      // Obtener IP del usuario
-      console.log('[addAppointment] Iniciando obtención de IP...');
       const userIP = await getUserIP();
-      console.log('[addAppointment] ✅ IP obtenida:', userIP);
-      
-      if (!userIP) {
-        console.warn('[addAppointment] ⚠️ No se pudo obtener la IP del usuario. El turno se guardará sin IP.');
-      }
-      
-      // Validar baneos - verificar en Supabase y localStorage
-      let bannedIPs: any[] = [];
-      
-      // Cargar desde Supabase
-      try {
-        const { data: supabaseIPs, error } = await supabase
-          .from('banned_ips')
-          .select('*');
-        
-        if (!error && supabaseIPs) {
-          bannedIPs = [...supabaseIPs];
-          console.log('[addAppointment] IPs baneadas en Supabase:', bannedIPs.length);
-        }
-      } catch (supabaseErr) {
-        console.warn('[addAppointment] Error cargando de Supabase:', supabaseErr);
-      }
-      
-      // Cargar desde localStorage y combinar
-      try {
-        const localIPs = JSON.parse(localStorage.getItem('banned_ips') || '[]');
-        localIPs.forEach((localIP: any) => {
-          if (!bannedIPs.some(b => b.ip_address === localIP.ip_address)) {
-            bannedIPs.push(localIP);
-          }
+
+      if (!isAdmin) {
+        const companions = appointment.additionalCustomerNames || [];
+        const { data, error } = await supabase.rpc('create_public_booking', {
+          p_customer_name: appointment.customerName,
+          p_customer_phone: normalizePhoneDigits(appointment.customerPhone),
+          p_service_name: appointment.service.name,
+          p_service_price: appointment.service.price,
+          p_service_duration: appointment.service.duration,
+          p_service_icon: appointment.service.icon,
+          p_date: appointment.date,
+          p_time: appointment.time,
+          p_notes: appointment.notes ?? null,
+          p_ip_address: userIP ?? null,
+          p_additional_names: companions,
         });
-        console.log('[addAppointment] Total IPs baneadas (combinadas):', bannedIPs.length);
-      } catch (localErr) {
-        console.error('[addAppointment] Error cargando localStorage:', localErr);
-      }
-      
-      // Verificar si está baneado - IP
-      if (userIP) {
-        const userIPTrimmed = userIP.trim();
-        console.log('[addAppointment] Verificando si IP está baneada:', userIPTrimmed);
-        console.log('[addAppointment] Lista de IPs baneadas:', bannedIPs.map((b: any) => b.ip_address));
-        
-        const isBanned = bannedIPs.some((b: any) => {
-          const bannedIP = (b.ip_address || '').trim();
-          const matches = bannedIP === userIPTrimmed;
-          if (matches) {
-            console.log('[addAppointment] ¡IP baneada encontrada!', { bannedIP, userIPTrimmed });
-          }
-          return matches;
-        });
-        
-        if (isBanned) {
-          const banInfo = bannedIPs.find((b: any) => (b.ip_address || '').trim() === userIPTrimmed);
-          const reason = banInfo?.reason ? ` Razón: ${banInfo.reason}` : '';
-          console.error('[addAppointment] ❌ IP BANEADA - Bloqueando creación de turno:', userIPTrimmed);
-          throw new Error(`🚫 Tu IP ha sido bloqueada. No puedes crear turnos.${reason}`);
+
+        if (error) {
+          const msg = error.message?.includes('bloquead')
+            ? error.message
+            : 'No se pudo crear el turno. Verificá los datos o contactá a la barbería.';
+          throw new Error(msg);
         }
-        console.log('[addAppointment] ✅ IP no está baneada, continuando con la creación del turno...');
-      } else {
-        console.warn('[addAppointment] No se pudo obtener la IP del usuario');
+
+        const row = data as AppointmentRow;
+        const newAppointment = convertToAppointment(row);
+        await loadAppointments();
+        return newAppointment;
       }
-      
-      // Cargar teléfonos y emails baneados
-      const bannedPhones = JSON.parse(localStorage.getItem('banned_phones') || '[]');
-      const bannedEmails = JSON.parse(localStorage.getItem('banned_emails') || '[]');
-      
-      // Intentar cargar también desde Supabase
-      try {
-        const { data: supabasePhones } = await supabase.from('banned_phones').select('*');
-        if (supabasePhones) {
-          supabasePhones.forEach((sp: any) => {
-            if (!bannedPhones.some((bp: any) => bp.phone === sp.phone)) {
-              bannedPhones.push(sp);
-            }
-          });
-        }
-      } catch {}
-      
-      try {
-        const { data: supabaseEmails } = await supabase.from('banned_emails').select('*');
-        if (supabaseEmails) {
-          supabaseEmails.forEach((se: any) => {
-            if (!bannedEmails.some((be: any) => be.email === se.email)) {
-              bannedEmails.push(se);
-            }
-          });
-        }
-      } catch {}
-      
-      // Verificar si está baneado - Teléfono
-      const normalizedPhone = appointment.customerPhone.replace(/\s|-|\(|\)/g, '');
-      const bannedPhone = bannedPhones.find((b: any) => {
-        const bNormalized = b.phone?.replace(/\s|-|\(|\)/g, '');
-        return bNormalized === normalizedPhone;
-      });
-      if (bannedPhone) {
-        const reason = bannedPhone.reason ? ` Razón: ${bannedPhone.reason}` : '';
-        throw new Error(`🚫 Este teléfono ha sido bloqueado. No puedes crear turnos.${reason}`);
-      }
-      
-      // Verificar si está baneado - Email
-      if (appointment.customerEmail) {
-        const emailLower = appointment.customerEmail.toLowerCase();
-        const bannedEmail = bannedEmails.find((b: any) => b.email?.toLowerCase() === emailLower);
-        if (bannedEmail) {
-          const reason = bannedEmail.reason ? ` Razón: ${bannedEmail.reason}` : '';
-          throw new Error(`🚫 Este email ha sido bloqueado. No puedes crear turnos.${reason}`);
-        }
-      }
-      
-      // Asegurar que haya ID
-      const id = (appointment as any).id ?? Math.random().toString(36).substr(2, 9);
-      // Guardar IP (usar undefined para TypeScript, pero convertToRow lo convertirá a null para Supabase)
+
+      const id = crypto.randomUUID();
       const withId = { ...appointment, id, ipAddress: userIP || undefined };
       const row = convertToRow(withId);
-      
-      console.log('[addAppointment] 📝 Preparando para guardar:', {
-        appointmentId: id,
-        userIP: userIP,
-        ipAddress_in_object: withId.ipAddress,
-        ip_address_in_row: row.ip_address,
-        row_completo: row
-      });
-      
+
       const insertData = {
         ...row,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      
-      console.log('[addAppointment] 📤 Insertando en Supabase:', {
-        ...insertData,
-        ip_address: insertData.ip_address
-      });
-      
+
       const { data, error } = await supabase
         .from('appointments')
         .insert([insertData])
         .select()
-        .single()
+        .single();
 
-      if (error) {
-        console.error('[addAppointment] ❌ Error insertando en Supabase:', error);
-        console.error('[addAppointment] Datos que se intentaron insertar:', insertData);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('[addAppointment] ✅ Turno guardado exitosamente');
-      console.log('[addAppointment] 📥 Respuesta de Supabase:', {
-        id: data?.id,
-        ip_address_en_respuesta: data?.ip_address,
-        data_completa: data
-      });
-      
       const newAppointment = convertToAppointment(data);
-      console.log('[addAppointment] 🔄 Appointment convertido:', {
-        id: newAppointment.id,
-        ipAddress: newAppointment.ipAddress,
-        tieneIP: !!newAppointment.ipAddress
-      });
-      
-      setAppointments(prev => [newAppointment, ...prev])
-      return newAppointment
+      setAppointments((prev) => [newAppointment, ...prev]);
+      return newAppointment;
     } catch (err) {
       console.error('Error adding appointment:', err)
       setError(err instanceof Error ? err.message : 'Error al crear turno')
@@ -390,6 +292,7 @@ export const useSupabaseAppointments = () => {
   }
 
   const updateAppointment = async (id: string, updates: Partial<Appointment>) => {
+    if (!isAdmin) throw new Error('No autorizado');
     try {
       const appointment = appointments.find(apt => apt.id === id)
       if (!appointment) throw new Error('Turno no encontrado')
@@ -421,7 +324,17 @@ export const useSupabaseAppointments = () => {
     }
   }
 
-  const deleteAppointment = async (id: string) => {
+  const deleteAppointment = async (id: string, customerPhone?: string) => {
+    if (!isAdmin) {
+      if (!customerPhone) throw new Error('No autorizado');
+      const { error } = await supabase.rpc('cancel_public_booking', {
+        p_appointment_id: id,
+        p_customer_phone: normalizePhoneDigits(customerPhone),
+      });
+      if (error) throw new Error(error.message || 'No se pudo cancelar el turno');
+      await loadAppointments();
+      return;
+    }
     try {
       // Intentar marcar como eliminado (si la columna existe)
       const { error: updateError } = await supabase
@@ -458,6 +371,7 @@ export const useSupabaseAppointments = () => {
 
   // Restaurar un turno desde la papelera
   const restoreAppointment = async (id: string) => {
+    if (!isAdmin) throw new Error('No autorizado');
     try {
       const { error } = await supabase
         .from('appointments')
@@ -487,6 +401,7 @@ export const useSupabaseAppointments = () => {
 
   // Eliminar permanentemente de la papelera
   const permanentlyDeleteAppointment = async (id: string) => {
+    if (!isAdmin) throw new Error('No autorizado');
     try {
       const { error } = await supabase
         .from('appointments')

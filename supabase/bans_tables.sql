@@ -1,5 +1,5 @@
--- Tablas para el sistema de baneos
--- Ejecuta este script en el SQL Editor de Supabase
+-- Tablas para el sistema de baneos (esquema inicial)
+-- ⚠️ Para políticas de seguridad, ejecutá también: supabase/security_setup.sql
 
 -- Tabla de IPs baneadas
 CREATE TABLE IF NOT EXISTS banned_ips (
@@ -45,23 +45,5 @@ CREATE INDEX IF NOT EXISTS idx_banned_phones_phone ON banned_phones(phone);
 CREATE INDEX IF NOT EXISTS idx_banned_emails_email ON banned_emails(email);
 CREATE INDEX IF NOT EXISTS idx_appointments_ip ON appointments(ip_address);
 
--- Habilitar RLS (Row Level Security) si es necesario
-ALTER TABLE banned_ips ENABLE ROW LEVEL SECURITY;
-ALTER TABLE banned_phones ENABLE ROW LEVEL SECURITY;
-ALTER TABLE banned_emails ENABLE ROW LEVEL SECURITY;
-
--- Políticas RLS: Permitir lectura y escritura para usuarios autenticados
--- Ajusta estas políticas según tus necesidades de seguridad
-
--- Políticas para banned_ips
-CREATE POLICY "Allow all operations on banned_ips" ON banned_ips
-  FOR ALL USING (true) WITH CHECK (true);
-
--- Políticas para banned_phones
-CREATE POLICY "Allow all operations on banned_phones" ON banned_phones
-  FOR ALL USING (true) WITH CHECK (true);
-
--- Políticas para banned_emails
-CREATE POLICY "Allow all operations on banned_emails" ON banned_emails
-  FOR ALL USING (true) WITH CHECK (true);
+-- RLS: configurar con supabase/security_setup.sql (no usar políticas abiertas)
 
