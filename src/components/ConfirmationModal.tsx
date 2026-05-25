@@ -1,13 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AlertCircle, X, Check } from 'lucide-react';
 
 interface ConfirmationModalProps {
     isOpen: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: (phone?: string) => void;
     onCancel: () => void;
     isLoading?: boolean;
+    requirePhoneInput?: boolean;
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -17,8 +18,17 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     onConfirm,
     onCancel,
     isLoading = false,
+    requirePhoneInput = false,
 }) => {
+    const [phone, setPhone] = useState('');
+
     if (!isOpen) return null;
+
+    const handleConfirm = () => {
+        onConfirm(requirePhoneInput ? phone : undefined);
+    };
+
+    const isButtonDisabled = isLoading || (requirePhoneInput && phone.trim().length < 8);
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -36,9 +46,25 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                         {title}
                     </h3>
 
-                    <p className="text-gray-300 mb-8 leading-relaxed">
+                    <p className="text-gray-300 mb-4 leading-relaxed">
                         {message}
                     </p>
+
+                    {requirePhoneInput && (
+                        <div className="mt-4 mb-6 text-left">
+                            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                WhatsApp con el que reservaste *
+                            </label>
+                            <input
+                                type="tel"
+                                value={phone}
+                                onChange={(e) => setPhone(e.target.value)}
+                                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 text-white rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 focus:outline-none transition-all text-sm"
+                                placeholder="Ej: 11 1234-5678"
+                                required
+                            />
+                        </div>
+                    )}
 
                     <div className="flex gap-3">
                         <button
@@ -49,8 +75,8 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
                             Cancelar
                         </button>
                         <button
-                            onClick={onConfirm}
-                            disabled={isLoading}
+                            onClick={handleConfirm}
+                            disabled={isButtonDisabled}
                             className="flex-1 px-4 py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-xl font-bold shadow-lg shadow-purple-900/40 hover:shadow-purple-900/60 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (

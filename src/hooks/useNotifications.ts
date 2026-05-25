@@ -4,7 +4,7 @@ interface Notification {
   id: string;
   type: 'success' | 'error' | 'warning' | 'info';
   title: string;
-  message: string;
+  message: string | React.ReactNode;
   duration?: number;
 }
 
@@ -17,10 +17,12 @@ export function useNotifications() {
     
     setNotifications(prev => [...prev, newNotification]);
 
-    // Auto remove after duration
-    setTimeout(() => {
-      removeNotification(id);
-    }, notification.duration || 5000);
+    // Auto remove after duration only if explicitly set
+    if (notification.duration) {
+      setTimeout(() => {
+        removeNotification(id);
+      }, notification.duration);
+    }
   };
 
   const removeNotification = (id: string) => {

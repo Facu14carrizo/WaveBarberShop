@@ -16,6 +16,7 @@ import { Appointment, Service } from './types';
 import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
 import { scheduleReminders } from './utils/webhooks';
+import { X, RefreshCw, Calendar } from 'lucide-react';
 
 if (import.meta.env.DEV) {
   void import('./utils/testWhatsApp');
@@ -32,7 +33,9 @@ function App() {
 
   // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showManageModal, setShowManageModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
 
   const {
     appointments,
@@ -74,10 +77,30 @@ function App() {
           const isValidStatus = ['confirmed', 'pending'].includes(found.status);
 
           if (isValidStatus) {
-            setUpcomingAppointment(found);
+            const savedName = localStorage.getItem('upcoming_appointment_name') || '';
+            const savedPhone = localStorage.getItem('upcoming_appointment_phone') || '';
+            const savedCompanionsRaw = localStorage.getItem('upcoming_appointment_companions');
+            let savedCompanions: string[] = [];
+            if (savedCompanionsRaw) {
+              try {
+                savedCompanions = JSON.parse(savedCompanionsRaw);
+              } catch (e) {
+                console.error(e);
+              }
+            }
+
+            setUpcomingAppointment({
+              ...found,
+              customerName: savedName || found.customerName,
+              customerPhone: savedPhone || found.customerPhone,
+              additionalCustomerNames: savedCompanions.length > 0 ? savedCompanions : found.additionalCustomerNames,
+            });
           } else {
             // If status is not valid (completed/cancelled), remove it
             localStorage.removeItem('upcoming_appointment_id');
+            localStorage.removeItem('upcoming_appointment_name');
+            localStorage.removeItem('upcoming_appointment_phone');
+            localStorage.removeItem('upcoming_appointment_companions');
             setUpcomingAppointment(null);
           }
         } else {
@@ -161,17 +184,55 @@ function App() {
     try {
       const newAppointment = await addAppointment(appointmentData);
 
-      // Save ID to local storage for reminder
+      // Si estábamos reagendando, cancelamos el turno anterior
+      const isResched = !!reschedulingAppointment;
+      if (reschedulingAppointment) {
+        try {
+          await deleteAppointment(reschedulingAppointment.id, reschedulingAppointment.customerPhone);
+        } catch (deleteError) {
+          console.error('Error cancelando el turno anterior:', deleteError);
+        }
+      }
+
+      // Save ID and details to local storage
       localStorage.setItem('upcoming_appointment_id', newAppointment.id);
+      localStorage.setItem('upcoming_appointment_name', newAppointment.customerName);
+      localStorage.setItem('upcoming_appointment_phone', newAppointment.customerPhone);
+      if (newAppointment.additionalCustomerNames && newAppointment.additionalCustomerNames.length > 0) {
+        localStorage.setItem('upcoming_appointment_companions', JSON.stringify(newAppointment.additionalCustomerNames));
+      } else {
+        localStorage.removeItem('upcoming_appointment_companions');
+      }
+
       setUpcomingAppointment(newAppointment);
+      setReschedulingAppointment(null);
 
       // Programar recordatorios automáticos (incluye confirmación inmediata)
       scheduleReminders(newAppointment);
 
       addNotification({
         type: 'success',
-        title: 'Turno Confirmado',
-        message: `Tu turno para ${newAppointment.service.name} el ${newAppointment.date} a las ${newAppointment.time} ha sido confirmado.`
+        title: isResched ? 'Turno Reagendado' : 'Turno Confirmado',
+        message: (
+          <div className="space-y-3 mt-2 text-left w-full">
+            <p className="text-white/90 text-sm">
+              {isResched 
+                ? 'Tu turno ha sido cambiado con éxito.' 
+                : `Tu reserva para ${newAppointment.service.name} ha sido confirmada.`}
+            </p>
+            <div className="bg-black/40 border border-white/10 rounded-md p-3.5 space-y-2">
+              <div className="text-emerald-400 font-extrabold text-xs tracking-wider uppercase text-center">
+                {isResched ? 'Nuevo Horario' : 'Horario Reservado'}
+              </div>
+              <div className="text-white font-extrabold text-sm flex items-center gap-1.5 bg-white/5 py-1.5 px-2.5 rounded border border-white/5 justify-center">
+                📅 {newAppointment.date.toUpperCase()}
+              </div>
+              <div className="text-emerald-300 font-black text-2xl flex items-center justify-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 py-2 rounded">
+                ⏰ {newAppointment.time} hs
+              </div>
+            </div>
+          </div>
+        )
       });
     } catch (error) {
       console.error('Error creating appointment:', error);
@@ -254,33 +315,65 @@ function App() {
     setShowCancelModal(true);
   };
 
-  const handleConfirmCancel = async () => {
+  const handleStartRescheduling = () => {
     if (!upcomingAppointment) return;
+    setReschedulingAppointment(upcomingAppointment);
+    setSelectedService(upcomingAppointment.service);
+    setShowManageModal(false);
+
+    // Smooth scroll to selection section
+    setTimeout(() => {
+      const element = document.getElementById('customer-booking-section');
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        window.scrollTo({ top: 350, behavior: 'smooth' });
+      }
+    }, 150);
+  };
+
+  const handleCancelClickFromManage = () => {
+    setShowManageModal(false);
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async (enteredPhone?: string) => {
+    if (!upcomingAppointment) return;
+
+    const phoneToUse = upcomingAppointment.customerPhone || enteredPhone || '';
+
+    if (!phoneToUse) {
+      addNotification({
+        type: 'error',
+        title: 'Falta Teléfono',
+        message: 'Por favor ingresá tu número de WhatsApp para cancelar.'
+      });
+      return;
+    }
 
     // Guardar el servicio del turno actual antes de borrarlo
     const previousService = upcomingAppointment.service;
 
     setIsCancelling(true);
     try {
-      await deleteAppointment(upcomingAppointment.id, upcomingAppointment.customerPhone);
+      await deleteAppointment(upcomingAppointment.id, phoneToUse);
       localStorage.removeItem('upcoming_appointment_id');
+      localStorage.removeItem('upcoming_appointment_name');
+      localStorage.removeItem('upcoming_appointment_phone');
+      localStorage.removeItem('upcoming_appointment_companions');
       setUpcomingAppointment(null);
+      setReschedulingAppointment(null);
 
-      // Auto-seleccionar el servicio para que el usuario elija nuevo horario directamente
-      setSelectedService(previousService);
+      // Limpiar selección de servicio al cancelar definitivamente
+      setSelectedService(null);
 
       setShowCancelModal(false);
 
       addNotification({
         type: 'info',
         title: 'Turno Cancelado',
-        message: 'Tu turno ha sido cancelado. Selecciona un nuevo horario.'
+        message: 'Tu turno ha sido cancelado con éxito.'
       });
-
-      // Smooth scroll to top to show slots
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 100);
 
     } catch (error) {
       console.error('Error cancelling appointment:', error);
@@ -308,11 +401,43 @@ function App() {
       />
 
       {/* Appointment Reminder Banner */}
-      {view === 'customer' && upcomingAppointment && (
+      {view === 'customer' && upcomingAppointment && !reschedulingAppointment && (
         <AppointmentBanner
           appointment={upcomingAppointment}
-          onCancel={handleCancelClick}
+          onCancel={() => setShowManageModal(true)}
         />
+      )}
+
+      {/* Rescheduling Active Banner */}
+      {view === 'customer' && reschedulingAppointment && (
+        <div className="bg-gradient-to-r from-amber-600/90 via-orange-600/90 to-red-600/90 border-b border-orange-500/30 backdrop-blur-md shadow-lg sticky top-0 z-50 animate-slide-down">
+          <div className="max-w-4xl mx-auto px-4 py-3">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
+              <div className="flex items-center gap-2">
+                <span className="animate-pulse bg-white/20 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">
+                  Reagendando
+                </span>
+                <span className="text-sm font-medium">
+                  Elegí un nuevo día y horario para tu turno de <strong className="text-amber-100">{reschedulingAppointment.service.name}</strong>.
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setReschedulingAppointment(null);
+                  setSelectedService(null);
+                  addNotification({
+                    type: 'info',
+                    title: 'Cambio Cancelado',
+                    message: 'Se mantuvo tu turno original intacto.'
+                  });
+                }}
+                className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-semibold transition-all border border-white/10"
+              >
+                Cancelar cambio (Mantener turno)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Header view={view} onViewChange={handleViewChange} />
@@ -331,6 +456,7 @@ function App() {
           onNewAppointment={handleNewAppointment}
           selectedService={selectedService}
           onServiceSelect={setSelectedService}
+          reschedulingAppointment={reschedulingAppointment}
         />
       ) : (
         <OwnerDashboard
@@ -347,15 +473,19 @@ function App() {
       )}
 
       {/* Notifications */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {notifications.map((notification) => (
-          <NotificationToast
-            key={notification.id}
-            {...notification}
-            onClose={removeNotification}
-          />
-        ))}
-      </div>
+      {notifications.length > 0 && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="w-full max-w-sm space-y-3 pointer-events-auto">
+            {notifications.map((notification) => (
+              <NotificationToast
+                key={notification.id}
+                {...notification}
+                onClose={removeNotification}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* PIN Authentication Modal */}
       {showLoginModal && (
@@ -366,14 +496,97 @@ function App() {
         />
       )}
 
+      {/* Manage Appointment Modal */}
+      {showManageModal && upcomingAppointment && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-gray-950 border-2 border-purple-500/40 rounded-md max-w-sm w-full p-6 sm:p-8 shadow-2xl relative overflow-hidden text-center flex flex-col justify-between min-h-[480px]">
+            {/* Ambient gradients */}
+            <div className="absolute top-0 right-0 -mt-10 -mr-10 w-36 h-36 bg-purple-600/10 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 left-0 -mb-10 -ml-10 w-36 h-36 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <button 
+              onClick={() => setShowManageModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors p-1 hover:bg-white/5 rounded-md"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="relative z-10 flex-1 flex flex-col justify-between space-y-6">
+              {/* Header Icon + Title */}
+              <div className="flex flex-col items-center">
+                <div className="p-3.5 rounded-full bg-purple-900/20 border border-purple-500/30 mb-3 inline-flex">
+                  <Calendar className="h-9 w-9 text-purple-400" />
+                </div>
+                <h3 className="text-2xl font-extrabold text-white tracking-wide">
+                  Gestionar mi Turno
+                </h3>
+              </div>
+
+              {/* Current Booking Info (Highly Highlighted) */}
+              <div className="bg-gray-900 border-2 border-purple-500/30 rounded-md p-6 text-center shadow-inner relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500"></div>
+                <p className="text-xs text-purple-400 font-extrabold uppercase tracking-widest mb-3">
+                  Tu reserva actual
+                </p>
+                <div className="inline-flex items-center justify-center gap-2 text-white font-extrabold text-base mb-4 bg-white/5 py-1 px-3 rounded-md border border-white/5">
+                  <span className="text-xl">{upcomingAppointment.service.icon}</span>
+                  <span>{upcomingAppointment.service.name}</span>
+                </div>
+                
+                <div className="space-y-2.5">
+                  {/* Date Highlighted */}
+                  <div className="text-white text-sm font-black tracking-wide bg-purple-950/40 border border-purple-500/20 py-2.5 rounded-md justify-center flex items-center gap-1.5">
+                    📅 {upcomingAppointment.date.toUpperCase()}
+                  </div>
+                  {/* Time Highlighted */}
+                  <div className="text-purple-300 text-3xl font-black tracking-widest bg-purple-500/10 border border-purple-500/30 py-3 rounded-md animate-pulse flex items-center justify-center gap-1.5">
+                    ⏰ {upcomingAppointment.time} hs
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons (Spaced & Tall) */}
+              <div className="space-y-4 pt-2">
+                <button
+                  onClick={handleStartRescheduling}
+                  className="w-full py-4 px-5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white rounded-md font-bold shadow-lg shadow-purple-950/50 hover:scale-[1.02] active:scale-[0.98] transition-all flex flex-col items-center justify-center gap-1.5 text-center"
+                >
+                  <span className="text-lg flex items-center gap-2">
+                    <RefreshCw className="w-5 h-5 animate-pulse" /> Reagendar turno
+                  </span>
+                  <span className="text-xs text-purple-100 font-normal tracking-wide leading-snug">
+                    Mantenemos tu turno actual 100% seguro
+                  </span>
+                </button>
+
+                <button
+                  onClick={handleCancelClickFromManage}
+                  className="w-full py-3.5 px-4 bg-red-950/40 border border-red-500/30 hover:bg-red-950/60 text-red-200 hover:text-red-100 rounded-md font-bold transition-all flex flex-col items-center justify-center gap-1 text-center"
+                >
+                  <span className="text-sm uppercase tracking-wider">
+                    Cancelar turno definitivamente
+                  </span>
+                  <span className="text-[10px] text-red-300/70 font-normal leading-normal">
+                    Si no vas a poder asistir, por favor liberá el lugar
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Cancel Confirmation Modal */}
       <ConfirmationModal
         isOpen={showCancelModal}
-        title="¿Cambiar turno?"
-        message="¿Estás seguro que querés cambiar tu turno? El turno actual será cancelado para que puedas elegir uno nuevo."
+        title="¿Cancelar turno definitivamente?"
+        message={upcomingAppointment?.customerPhone 
+          ? "¿Estás seguro que querés cancelar tu turno definitivamente? Esta acción no se puede deshacer y tu lugar quedará liberado."
+          : "Para poder cancelar tu turno anterior de forma segura, ingresá tu número de WhatsApp registrado."}
         onConfirm={handleConfirmCancel}
         onCancel={() => setShowCancelModal(false)}
         isLoading={isCancelling}
+        requirePhoneInput={upcomingAppointment ? !upcomingAppointment.customerPhone : false}
       />
 
       {/* Background Music */}

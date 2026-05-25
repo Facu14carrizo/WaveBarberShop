@@ -10,6 +10,7 @@ interface BookingFormProps {
   selectedService: Service;
   onBookingComplete: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => void;
   onCancel: () => void;
+  reschedulingAppointment?: Appointment | null;
 }
 
 export const BookingForm: React.FC<BookingFormProps> = ({
@@ -17,11 +18,12 @@ export const BookingForm: React.FC<BookingFormProps> = ({
   selectedTime,
   selectedService,
   onBookingComplete,
-  onCancel
+  onCancel,
+  reschedulingAppointment
 }) => {
-  const [customerName, setCustomerName] = useState('');
-  const [additionalNames, setAdditionalNames] = useState<string[]>([]); // hasta 2 adicionales
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(reschedulingAppointment?.customerName || '');
+  const [additionalNames, setAdditionalNames] = useState<string[]>(reschedulingAppointment?.additionalCustomerNames || []); // hasta 2 adicionales
+  const [customerPhone, setCustomerPhone] = useState(reschedulingAppointment?.customerPhone || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showPolicies, setShowPolicies] = useState(false);
@@ -108,7 +110,7 @@ export const BookingForm: React.FC<BookingFormProps> = ({
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50">
       <div className="bg-gray-900 border border-gray-700 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
         <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center">
-          Confirmar Reserva
+          {reschedulingAppointment ? 'Confirmar Cambio de Turno' : 'Confirmar Reserva'}
         </h3>
 
         <div className="bg-gradient-to-r from-purple-900/30 via-blue-900/30 to-cyan-900/30 border border-purple-500/20 rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-4 sm:mb-6">
@@ -265,7 +267,11 @@ export const BookingForm: React.FC<BookingFormProps> = ({
               disabled={isSubmitting}
               className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg sm:rounded-xl hover:from-purple-700 hover:to-blue-700 transition-all duration-200 font-medium disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-purple-500/25 text-sm sm:text-base"
             >
-              {isSubmitting ? 'Confirmando...' : `Confirmar  $${selectedService.price.toLocaleString()}`}
+              {isSubmitting 
+                ? 'Confirmando...' 
+                : reschedulingAppointment 
+                  ? 'Confirmar Cambio' 
+                  : `Confirmar  $${selectedService.price.toLocaleString()}`}
             </button>
           </div>
         </form>

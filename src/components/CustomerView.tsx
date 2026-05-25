@@ -13,20 +13,23 @@ import { buildSobreturnoWhatsAppLink } from '../utils/phone';
 
 interface CustomerViewProps {
   appointments: Appointment[];
-  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => void;
+  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt'>) => Promise<void> | void;
   selectedService: Service | null;
   onServiceSelect: (service: Service | null) => void;
+  reschedulingAppointment?: Appointment | null;
 }
 
 export const CustomerView: React.FC<CustomerViewProps> = ({
   appointments,
   onNewAppointment,
   selectedService,
-  onServiceSelect
+  onServiceSelect,
+  reschedulingAppointment
 }) => {
   const [selectedDay, setSelectedDay] = useState<'friday' | 'saturday'>('friday');
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
+  const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
   const { availability } = useDayAvailability();
   const [showNoSlotsModal, setShowNoSlotsModal] = useState(false);
@@ -56,9 +59,33 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
     setSelectedTime(time);
   };
 
-  const handleBookingSubmit = () => {
+  const handleBookingSubmit = async () => {
     if (selectedTime && selectedService) {
-      setShowBookingForm(true);
+      if (reschedulingAppointment && reschedulingAppointment.customerName && reschedulingAppointment.customerName.trim().length > 0 && reschedulingAppointment.customerPhone && reschedulingAppointment.customerPhone.trim().length > 0) {
+        setIsSubmittingReschedule(true);
+        try {
+          const appointment: Omit<Appointment, 'id' | 'createdAt'> = {
+            date: selectedDate,
+            time: selectedTime,
+            customerName: reschedulingAppointment.customerName,
+            additionalCustomerNames: reschedulingAppointment.additionalCustomerNames,
+            customerPhone: reschedulingAppointment.customerPhone,
+            service: selectedService,
+            status: 'confirmed',
+            updatedAt: new Date(),
+            reminderSent: false
+          };
+          await onNewAppointment(appointment);
+          onServiceSelect(null);
+          setSelectedTime(null);
+        } catch (err) {
+          console.error('Error auto-rescheduling:', err);
+        } finally {
+          setIsSubmittingReschedule(false);
+        }
+      } else {
+        setShowBookingForm(true);
+      }
     }
   };
 
@@ -95,7 +122,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
         />
       )}
 
-      <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      <div id="customer-booking-section" className="max-w-4xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
 
         {/* Hero Section */}
         <div className="text-center mb-6 sm:mb-8 md:mb-12">
@@ -252,12 +279,28 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
               <div className="text-center">
                 <button
                   onClick={handleBookingSubmit}
-                  className="w-full sm:w-auto px-6 sm:px-8 md:px-12 py-3 sm:py-4 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white font-bold text-base sm:text-lg rounded-xl sm:rounded-2xl shadow-xl shadow-purple-500/25 hover:shadow-2xl hover:shadow-purple-500/40 transform active:scale-95 sm:hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2 mx-auto touch-manipulation"
+                  disabled={isSubmittingReschedule}
+                  className="w-full sm:w-auto px-6 sm:px-8 md:px-12 py-3 sm:py-4 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white font-bold text-base sm:text-lg rounded-xl sm:rounded-2xl shadow-xl shadow-purple-500/25 hover:shadow-2xl hover:shadow-purple-500/40 transform active:scale-95 sm:hover:scale-105 transition-all duration-300 flex items-center justify-center space-x-2 mx-auto touch-manipulation disabled:opacity-75 disabled:cursor-not-allowed"
                 >
-                  <span className="text-center">Reservar {selectedService.name} - {selectedTime}</span>
-                  <span className="bg-white/20 px-2 py-1 rounded-lg text-xs sm:text-sm">
-                    ${selectedService.price.toLocaleString()}
-                  </span>
+                  {isSubmittingReschedule ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                      <span>Reagendando turno...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-center">
+                        {reschedulingAppointment 
+                          ? `Confirmar Cambio para las ${selectedTime} hs` 
+                          : `Reservar ${selectedService.name} - ${selectedTime}`}
+                      </span>
+                      {!reschedulingAppointment && (
+                        <span className="bg-white/20 px-2 py-1 rounded-lg text-xs sm:text-sm">
+                          ${selectedService.price.toLocaleString()}
+                        </span>
+                      )}
+                    </>
+                  )}
                 </button>
               </div>
             )}
@@ -294,6 +337,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
             selectedService={selectedService}
             onBookingComplete={handleBookingComplete}
             onCancel={() => setShowBookingForm(false)}
+            reschedulingAppointment={reschedulingAppointment}
           />
         )}
       </div>
