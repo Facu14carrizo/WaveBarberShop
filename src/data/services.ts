@@ -6,23 +6,23 @@ export const defaultServices: Service[] = [
     id: 'classic-cut',
     name: 'Corte Clásico',
     duration: 30,
-    price: 10000,
-    description: 'Corte tradicional con tijera y máquina. Perfilado de cejas y barba.',
+    price: 14000,
+    description: 'Corte con tijera y maquina tradicional, fade, etc.\n(incluye perfilado de barba y cejas).',
     icon: '✂️'
   },
   {
     id: 'beard-trim',
     name: 'Arreglo de Barba',
     duration: 20,
-    price: 5000,
-    description: 'Perfilado, reducción de volumen y arreglo de la barba con navaja, máquina y tijera.',
+    price: 8000,
+    description: 'Perfilado, reducción de volumen y arreglo de la barba con navaja, máquina y tijera. (Exclusivo para barba, no incluye corte de cabello)',
     icon: '🪒 '
   },
   {
     id: 'designs',
     name: 'Corte + Diseño',
     duration: 40,
-    price: 12000,
+    price: 15000,
     description: 'Diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
     icon: '🎨'
   }

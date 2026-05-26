@@ -12,8 +12,42 @@ export const ServiceSelector: React.FC<ServiceSelectorProps> = ({
   selectedService,
   onServiceSelect
 }) => {
-  const { services } = useServices();
+  const { services, loading } = useServices();
   const activeServices = services.filter(s => s.isActive !== false);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <h3 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6 text-center animate-pulse">
+          Cargando servicios...
+        </h3>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-gray-800 border border-gray-700 p-4 sm:p-6 rounded-xl sm:rounded-2xl animate-pulse space-y-4 min-h-[160px] flex flex-col justify-between"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-3 w-3/4">
+                  <div className="w-10 h-10 bg-gray-700 rounded-full flex-shrink-0"></div>
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 bg-gray-700 rounded w-2/3"></div>
+                    <div className="h-3 bg-gray-700 rounded w-1/3"></div>
+                  </div>
+                </div>
+              </div>
+              <div className="h-3 bg-gray-700 rounded w-full mt-2"></div>
+              <div className="flex justify-between items-center pt-2">
+                <div className="h-6 bg-gray-700 rounded w-1/4"></div>
+                <div className="h-5 bg-gray-700 rounded w-1/5"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
