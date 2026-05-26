@@ -433,6 +433,58 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     setAppointmentToBan(null);
   };
 
+  const handleRegisterDebt = (appointment: Appointment) => {
+    try {
+      const saved = localStorage.getItem('wavebarber_pending_payments');
+      let currentDebts: any[] = [];
+      if (saved) {
+        try {
+          currentDebts = JSON.parse(saved);
+        } catch (e) {
+          console.error('Error parsing debts from localStorage:', e);
+        }
+      }
+
+      const alreadyExists = currentDebts.some(d => d.appointmentId === appointment.id);
+      if (alreadyExists) {
+        addNotification({
+          type: 'warning',
+          title: 'Ya Registrado',
+          message: `Este turno de ${appointment.customerName} ya está anotado como pendiente.`
+        });
+        return;
+      }
+
+      const newDebt = {
+        id: Math.random().toString(36).substr(2, 9),
+        appointmentId: appointment.id,
+        customerName: appointment.customerName,
+        customerPhone: appointment.customerPhone || undefined,
+        amount: appointment.service.price,
+        notes: `Corte: ${appointment.service.name}. Anotado desde la lista de turnos pasados.`,
+        date: appointment.date,
+        isPaid: false,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedDebts = [newDebt, ...currentDebts];
+      localStorage.setItem('wavebarber_pending_payments', JSON.stringify(updatedDebts));
+
+      addNotification({
+        type: 'success',
+        title: 'Deuda Anotada',
+        message: `Se registró la deuda de $${appointment.service.price.toLocaleString()} para ${appointment.customerName} correctamente.`
+      });
+    } catch (error) {
+      console.error('Error registering debt:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo registrar la deuda. Intente nuevamente.'
+      });
+    }
+  };
+
   const handleUndo = () => {
     if (!lastAction) return;
     const snap = lastAction.snapshot;
@@ -548,7 +600,21 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </button>
             {/* Menú desplegable */}
             {openMenuId === appointment.id && (
-              <div className="absolute right-0 top-10 z-50 bg-gray-700 border border-gray-600 rounded-lg shadow-xl min-w-[160px] overflow-hidden">
+              <div className="absolute right-0 top-10 z-50 bg-gray-700 border border-gray-600 rounded-lg shadow-xl min-w-[170px] overflow-hidden">
+                {isPast && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setOpenMenuId(null);
+                      handleRegisterDebt(appointment);
+                    }}
+                    className="w-full flex items-center space-x-2 px-4 py-2.5 text-sm text-yellow-400 hover:bg-yellow-500/20 transition-colors duration-200 border-b border-gray-600/50"
+                  >
+                    <DollarSign className="h-4 w-4" />
+                    <span>Anotar deuda</span>
+                  </button>
+                )}
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -1587,29 +1653,53 @@ const DebtsSection: React.FC<{
 
         {/* List Column */}
         <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-xl p-5 sm:p-6 shadow-lg flex flex-col">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-yellow-400" />
-              Lista de Cuentas ({filteredDebts.length})
+              {filter === 'pending' ? 'Cuentas Activas' : 'Historial de Pagados'}
             </h3>
             
-            {/* Filters */}
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
-                className="bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-purple-500"
-              >
-                <option value="pending">Pendientes</option>
-                <option value="paid">Pagados</option>
-                <option value="all">Ver Todos</option>
-              </select>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+              {/* Sub-Tabs de Deudas */}
+              <div className="flex bg-gray-900/60 p-0.5 rounded-lg border border-gray-700 justify-between">
+                <button
+                  onClick={() => setFilter('pending')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                    filter === 'pending'
+                      ? 'bg-yellow-600 text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>Pendientes</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    filter === 'pending' ? 'bg-yellow-800 text-yellow-100' : 'bg-gray-800 text-gray-400'
+                  }`}>
+                    {debts.filter(d => !d.isPaid).length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setFilter('paid')}
+                  className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-md text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 ${
+                    filter === 'paid'
+                      ? 'bg-green-600 text-white shadow'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <span>Historial de Pagados</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                    filter === 'paid' ? 'bg-green-800 text-green-100' : 'bg-gray-800 text-gray-400'
+                  }`}>
+                    {debts.filter(d => d.isPaid).length}
+                  </span>
+                </button>
+              </div>
 
-              <div className="relative flex-1 sm:flex-initial">
+              {/* Buscador */}
+              <div className="relative flex-1 md:flex-initial min-w-[150px]">
                 <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Buscar..."
+                  placeholder="Buscar cliente..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 bg-gray-700 border border-gray-600 text-white text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
