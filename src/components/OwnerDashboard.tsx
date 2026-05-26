@@ -35,7 +35,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   addNotification: addNotificationProp
 }) => {
   const SHOW_STATUS = false;
-  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans' | 'debts'>('appointments');
   const [deletedAppointments, setDeletedAppointments] = useState<Appointment[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
@@ -867,64 +867,80 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
         {/* Navigation Tabs */}
         <div className="flex justify-center mb-4 sm:mb-6 md:mb-8">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-1 flex">
+          <div className="bg-gray-800 border border-gray-700 rounded-xl sm:rounded-2xl p-1 flex w-full max-w-2xl justify-between gap-1">
             <button
               onClick={() => setActiveTab('appointments')}
-              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center space-x-1 sm:space-x-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'appointments'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
-              <Calendar className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-sm sm:text-base">Turnos</span>
+              <Calendar className="h-4 w-4" />
+              <span className="text-xs sm:text-sm">Turnos</span>
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center space-x-1 sm:space-x-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'analytics'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
             >
-              <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
-              <span className="text-sm sm:text-base">Métricas</span>
+              <BarChart3 className="h-4 w-4" />
+              <span className="text-xs sm:text-sm">Métricas</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('debts')}
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+                activeTab === 'debts'
+                  ? 'bg-yellow-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+              title="Cuentas Pendientes"
+            >
+              <DollarSign className="h-4 w-4" />
             </button>
             <button
               onClick={() => setActiveTab('settings')}
-              className={`flex items-center justify-center px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'settings'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
+              title="Configuración"
             >
-              <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Settings className="h-4 w-4" />
             </button>
             <button
               onClick={() => setActiveTab('trash')}
-              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'trash'
                   ? 'bg-red-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
+              title="Papelera"
             >
-              <Trash className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Trash className="h-4 w-4" />
             </button>
             <button
               onClick={() => setActiveTab('bans')}
-              className={`flex items-center justify-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'bans'
                   ? 'bg-orange-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
+              title="Baneos"
             >
-              <Shield className="h-3 w-3 sm:h-4 sm:w-4" />
+              <Shield className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         {activeTab === 'analytics' ? (
           <Analytics appointments={appointments} />
+        ) : activeTab === 'debts' ? (
+          <DebtsSection appointments={appointments} addNotification={addNotification} />
         ) : activeTab === 'bans' ? (
           <BansSection 
             bannedIPs={bannedIPs}
@@ -1155,13 +1171,549 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} addNotification={addNotification} />
         )}
 
-        {/* Modal de Confirmación de Baneo */}
-        <ConfirmBanModal
-          isOpen={banModalOpen}
-          appointment={appointmentToBan}
-          onConfirm={handleConfirmBan}
-          onCancel={handleCancelBan}
-        />
+
+      {/* Modal de Confirmación de Baneo */}
+      <ConfirmBanModal
+        isOpen={banModalOpen}
+        appointment={appointmentToBan}
+        onConfirm={handleConfirmBan}
+        onCancel={handleCancelBan}
+      />
+      </div>
+    </div>
+  );
+};
+
+const DebtsSection: React.FC<{
+  appointments: Appointment[];
+  addNotification: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
+}> = ({ appointments, addNotification }) => {
+  const [debts, setDebts] = useState<any[]>([]);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
+  const [date, setDate] = useState(() => {
+    const today = new Date();
+    return today.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }).replace(',', '');
+  });
+
+  // Obtener turnos recientes para autocompletar
+  const recentAppointments = [...appointments]
+    .filter(a => a.customerName)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 50);
+  const [filter, setFilter] = useState<'pending' | 'paid' | 'all'>('pending');
+  const [search, setSearch] = useState('');
+  const [showBackup, setShowBackup] = useState(false);
+  const [backupText, setBackupText] = useState('');
+
+  // Load from local storage
+  useEffect(() => {
+    const saved = localStorage.getItem('wavebarber_pending_payments');
+    if (saved) {
+      try {
+        setDebts(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error al cargar deudas de localStorage:', e);
+      }
+    }
+  }, []);
+
+  const saveDebts = (updatedDebts: any[]) => {
+    setDebts(updatedDebts);
+    localStorage.setItem('wavebarber_pending_payments', JSON.stringify(updatedDebts));
+  };
+
+  const handleAddDebt = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'El nombre del cliente es obligatorio.'
+      });
+      return;
+    }
+    if (!amount || parseFloat(amount) <= 0) {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'El monto debe ser mayor a 0.'
+      });
+      return;
+    }
+
+    const newDebt = {
+      id: Math.random().toString(36).substr(2, 9),
+      customerName: name.trim(),
+      customerPhone: phone.trim() || undefined,
+      amount: parseFloat(amount),
+      notes: notes.trim() || undefined,
+      date,
+      isPaid: false,
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [newDebt, ...debts];
+    saveDebts(updated);
+
+    // Reset form
+    setName('');
+    setPhone('');
+    setAmount('');
+    setNotes('');
+    setDate(new Date().toISOString().split('T')[0]);
+
+    addNotification({
+      type: 'success',
+      title: 'Anotado',
+      message: 'El saldo pendiente fue registrado correctamente.'
+    });
+  };
+
+  const handleMarkAsPaid = (id: string) => {
+    const updated = debts.map(d => {
+      if (d.id === id) {
+        return {
+          ...d,
+          isPaid: true,
+          paidAt: new Date().toISOString()
+        };
+      }
+      return d;
+    });
+    saveDebts(updated);
+    addNotification({
+      type: 'success',
+      title: 'Pago Registrado',
+      message: 'La cuenta ha sido marcada como PAGADA con éxito.'
+    });
+  };
+
+  const handleMarkAsPending = (id: string) => {
+    const updated = debts.map(d => {
+      if (d.id === id) {
+        return {
+          ...d,
+          isPaid: false,
+          paidAt: undefined
+        };
+      }
+      return d;
+    });
+    saveDebts(updated);
+    addNotification({
+      type: 'info',
+      title: 'Cuenta Pendiente',
+      message: 'La cuenta ha sido marcada como PENDIENTE nuevamente.'
+    });
+  };
+
+  const handleDeleteDebt = (id: string) => {
+    if (window.confirm('¿Estás seguro que deseas eliminar este registro permanentemente?')) {
+      const updated = debts.filter(d => d.id !== id);
+      saveDebts(updated);
+      addNotification({
+        type: 'info',
+        title: 'Registro Eliminado',
+        message: 'El registro fue borrado de la base de datos local.'
+      });
+    }
+  };
+
+  const handleExportBackup = () => {
+    const dataStr = JSON.stringify(debts, null, 2);
+    navigator.clipboard.writeText(dataStr);
+    addNotification({
+      type: 'success',
+      title: 'Copia Creada',
+      message: 'Los datos fueron copiados al portapapeles. Guardalos en un archivo de texto.'
+    });
+  };
+
+  const handleImportBackup = () => {
+    if (!backupText.trim()) {
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'Por favor, pega el texto de respaldo primero.'
+      });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(backupText);
+      if (!Array.isArray(parsed)) {
+        throw new Error('El formato debe ser una lista de registros.');
+      }
+      saveDebts(parsed);
+      setBackupText('');
+      setShowBackup(false);
+      addNotification({
+        type: 'success',
+        title: 'Datos Restaurados',
+        message: `Se importaron ${parsed.length} registros correctamente.`
+      });
+    } catch (e) {
+      addNotification({
+        type: 'error',
+        title: 'Importación Fallida',
+        message: 'El formato de texto es inválido. Verifica los datos.'
+      });
+    }
+  };
+
+  // Filter & Search
+  const filteredDebts = debts.filter(d => {
+    const matchesFilter = 
+      filter === 'all' || 
+      (filter === 'pending' && !d.isPaid) || 
+      (filter === 'paid' && d.isPaid);
+    
+    const matchesSearch = 
+      !search.trim() || 
+      d.customerName.toLowerCase().includes(search.toLowerCase()) || 
+      (d.customerPhone && d.customerPhone.includes(search)) ||
+      (d.notes && d.notes.toLowerCase().includes(search.toLowerCase()));
+
+    return matchesFilter && matchesSearch;
+  });
+
+  const totalPendingAmount = debts
+    .filter(d => !d.isPaid)
+    .reduce((sum, d) => sum + d.amount, 0);
+
+  const totalPaidAmount = debts
+    .filter(d => d.isPaid)
+    .reduce((sum, d) => sum + d.amount, 0);
+
+  return (
+    <div className="space-y-6 sm:space-y-8 animate-fade-in text-left">
+      {/* Header and Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex items-center justify-between col-span-1 sm:col-span-1">
+          <div>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Debiendo</p>
+            <p className="text-2xl sm:text-3xl font-black text-yellow-400 mt-1">
+              ${totalPendingAmount.toLocaleString()}
+            </p>
+          </div>
+          <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-full p-2.5">
+            <DollarSign className="h-6 w-6 text-yellow-400" />
+          </div>
+        </div>
+
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Total Cobrado (Histórico)</p>
+            <p className="text-2xl sm:text-3xl font-black text-green-400 mt-1">
+              ${totalPaidAmount.toLocaleString()}
+            </p>
+          </div>
+          <div className="bg-green-500/20 border border-green-500/30 rounded-full p-2.5">
+            <CheckCircle className="h-6 w-6 text-green-400" />
+          </div>
+        </div>
+
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-xs font-semibold uppercase tracking-wider">Clientes en Lista</p>
+            <p className="text-2xl sm:text-3xl font-black text-purple-400 mt-1">
+              {debts.filter(d => !d.isPaid).length} <span className="text-xs text-gray-500 font-normal">activos</span>
+            </p>
+          </div>
+          <div className="bg-purple-500/20 border border-purple-500/30 rounded-full p-2.5">
+            <User className="h-6 w-6 text-purple-400" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
+        {/* Form Column */}
+        <div className="lg:col-span-1 bg-gray-800 border border-gray-700 rounded-xl p-5 sm:p-6 shadow-lg h-fit">
+          <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Plus className="h-5 w-5 text-purple-400" />
+            Anotar Pendiente
+          </h3>
+          
+          <form onSubmit={handleAddDebt} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-purple-300 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                ⚡ Autocompletar desde Turno
+              </label>
+              <select
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (!val) return;
+                  const apt = appointments.find(a => a.id === val);
+                  if (apt) {
+                    setName(apt.customerName);
+                    setPhone(apt.customerPhone || '');
+                    setAmount(String(apt.service.price));
+                    setNotes(`Corte: ${apt.service.name}.`);
+                    setDate(apt.date);
+                  }
+                  // Reset select value to default placeholder
+                  e.target.value = "";
+                }}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-xs cursor-pointer"
+                defaultValue=""
+              >
+                <option value="">-- Selecciona un turno reciente --</option>
+                {recentAppointments.map(apt => (
+                  <option key={apt.id} value={apt.id}>
+                    {apt.customerName} - {apt.service.name} (${apt.service.price.toLocaleString()}) [{apt.date} {apt.time}]
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Nombre del Cliente *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                placeholder="Ej: Facundo Ojeda"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                WhatsApp (Opcional)
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                placeholder="Ej: 1123456789"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Monto Pendiente ($) *
+              </label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                placeholder="Ej: 10000"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Fecha del Corte
+              </label>
+              <input
+                type="text"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                placeholder="Ej: hoy, martes 26, o 26/05"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Detalle / Notas (Opcional)
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm resize-none"
+                placeholder="Ej: Corte clásico. Prometió pagar el sábado."
+                rows={3}
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-bold rounded-lg shadow-lg hover:shadow-purple-900/50 transition-all duration-200 text-sm flex items-center justify-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Anotar Cuenta
+            </button>
+          </form>
+
+          {/* Backup / Restore Toggle */}
+          <div className="mt-6 pt-4 border-t border-gray-700">
+            <button
+              onClick={() => setShowBackup(!showBackup)}
+              className="text-xs text-gray-400 hover:text-white transition-colors underline flex items-center gap-1.5"
+            >
+              ⚙️ Copia de seguridad / Respaldos
+            </button>
+
+            {showBackup && (
+              <div className="mt-4 p-3 bg-gray-900 border border-gray-800 rounded-lg space-y-3">
+                <p className="text-[11px] text-gray-400 leading-normal">
+                  Los datos se guardan en el navegador. Podés copiar un respaldo aquí o pegar uno viejo para restaurarlo.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleExportBackup}
+                    className="flex-1 py-1.5 px-2 bg-gray-800 hover:bg-gray-700 text-white rounded text-[11px] font-bold border border-gray-700"
+                  >
+                    Copiar Respaldo
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  <textarea
+                    value={backupText}
+                    onChange={(e) => setBackupText(e.target.value)}
+                    placeholder="Pegá el texto de respaldo aquí..."
+                    rows={2}
+                    className="w-full p-2 bg-gray-800 border border-gray-700 text-white text-xs rounded resize-none"
+                  />
+                  <button
+                    onClick={handleImportBackup}
+                    className="w-full py-1.5 bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-500/30 rounded text-[11px] font-bold"
+                  >
+                    Restaurar Respaldo
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* List Column */}
+        <div className="lg:col-span-2 bg-gray-800 border border-gray-700 rounded-xl p-5 sm:p-6 shadow-lg flex flex-col">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-yellow-400" />
+              Lista de Cuentas ({filteredDebts.length})
+            </h3>
+            
+            {/* Filters */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value as any)}
+                className="bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-1.5 text-xs focus:ring-1 focus:ring-purple-500"
+              >
+                <option value="pending">Pendientes</option>
+                <option value="paid">Pagados</option>
+                <option value="all">Ver Todos</option>
+              </select>
+
+              <div className="relative flex-1 sm:flex-initial">
+                <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Buscar..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-gray-700 border border-gray-600 text-white text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-purple-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* List Items */}
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[500px] pr-1">
+            {filteredDebts.length === 0 ? (
+              <div className="text-center py-12 bg-gray-900/30 border border-gray-800 rounded-lg">
+                <p className="text-gray-400 text-sm">No se encontraron cuentas registradas.</p>
+              </div>
+            ) : (
+              filteredDebts.map((debt) => (
+                <div 
+                  key={debt.id} 
+                  className={`p-4 border rounded-lg transition-all flex flex-col sm:flex-row justify-between gap-4 ${
+                    debt.isPaid 
+                      ? 'bg-green-950/10 border-green-500/20 text-gray-400' 
+                      : 'bg-gray-900 border-gray-800 border-l-4 border-l-yellow-500 hover:border-l-yellow-400'
+                  }`}
+                >
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`font-bold text-base ${debt.isPaid ? 'text-gray-400 line-through' : 'text-white'}`}>
+                        {debt.customerName}
+                      </span>
+                      {debt.isPaid ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
+                          PAGADO
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+                          PENDIENTE
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 text-xs text-gray-400 flex-wrap">
+                      <span className="flex items-center gap-1">📅 {debt.date}</span>
+                      {debt.customerPhone && (
+                        <a
+                          href={`https://wa.me/${debt.customerPhone.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-400 hover:underline flex items-center gap-1 font-semibold"
+                        >
+                          💬 WhatsApp
+                        </a>
+                      )}
+                    </div>
+
+                    {debt.notes && (
+                      <p className="text-xs text-gray-300 bg-black/20 p-2 rounded border border-white/5 mt-1">
+                        {debt.notes}
+                      </p>
+                    )}
+
+                    {debt.isPaid && debt.paidAt && (
+                      <p className="text-[10px] text-green-400 font-semibold">
+                        Pagado el: {new Date(debt.paidAt).toLocaleDateString()} a las {new Date(debt.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-2 min-w-[100px]">
+                    <span className={`text-xl font-black ${debt.isPaid ? 'text-gray-500' : 'text-yellow-400'}`}>
+                      ${debt.amount.toLocaleString()}
+                    </span>
+
+                    <div className="flex gap-1.5">
+                      {debt.isPaid ? (
+                        <button
+                          onClick={() => handleMarkAsPending(debt.id)}
+                          className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded text-xs font-semibold transition-colors"
+                          title="Volver a pendiente"
+                        >
+                          Reabrir
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleMarkAsPaid(debt.id)}
+                          className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold shadow transition-colors flex items-center gap-1"
+                        >
+                          <CheckCircle className="h-3 w-3" /> Cobrar
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => handleDeleteDebt(debt.id)}
+                        className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+                        title="Eliminar registro"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
