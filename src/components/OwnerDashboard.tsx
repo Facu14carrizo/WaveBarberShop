@@ -519,6 +519,47 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
   const renderAppointmentCard = (appointment: Appointment, isToday: boolean) => (
     (() => {
+      if (appointment.customerName === 'CERRADO') {
+        return (
+          <div key={appointment.id} className="bg-gray-800 border border-gray-700 rounded-2xl p-6 shadow-lg border-l-4 border-l-red-500 hover:shadow-xl transition-all duration-300 relative flex flex-col justify-between">
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex items-center space-x-3">
+                <div className="rounded-full p-2 bg-red-500/20 border border-red-500/30">
+                  <span className="text-lg">🔒</span>
+                </div>
+                <div>
+                  <p className="font-semibold text-red-400">
+                    {appointment.date}
+                  </p>
+                  <div className="flex items-center space-x-2 text-gray-400">
+                    <Clock className="h-4 w-4" />
+                    <span className="font-medium text-white">{appointment.time} hs</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
+                      CERRADO
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (window.confirm('¿Deseas volver a habilitar este horario?')) {
+                    onDeleteAppointment(appointment.id);
+                  }
+                }}
+                className="p-1.5 bg-gray-700 hover:bg-red-950/40 text-red-400 hover:text-red-300 border border-gray-600 hover:border-red-500/30 rounded-lg transition-all duration-200"
+                title="Habilitar Horario"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Este horario está bloqueado. Los clientes no podrán reservarlo.
+            </p>
+          </div>
+        );
+      }
+
       const isSobreturno = appointment.time.endsWith(':30');
       const d = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
       const dayIdx = d ? d.getDay() : 6; // 5=viernes, 6=sábado
@@ -1048,7 +1089,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-xs sm:text-sm font-medium">Total Reservas</p>
-                <p className="text-2xl sm:text-3xl font-bold text-purple-400">{confirmedAppointments.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-400">{confirmedAppointments.filter(a => a.customerName !== 'CERRADO').length}</p>
               </div>
               <div className="bg-purple-500/20 border border-purple-500/30 rounded-full p-2 sm:p-3">
                 <Calendar className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400" />
@@ -1060,7 +1101,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-xs sm:text-sm font-medium">Turnos Hoy</p>
-                <p className="text-2xl sm:text-3xl font-bold text-green-400">{todayAppointments.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-400">{todayAppointments.filter(a => a.customerName !== 'CERRADO').length}</p>
               </div>
               <div className="bg-green-500/20 border border-green-500/30 rounded-full p-2 sm:p-3">
                 <Clock className="h-6 w-6 sm:h-8 sm:w-8 text-green-400" />
@@ -1072,7 +1113,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-400 text-xs sm:text-sm font-medium">Próximos</p>
-                <p className="text-2xl sm:text-3xl font-bold text-blue-400">{futureAppointments.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-400">{futureAppointments.filter(a => a.customerName !== 'CERRADO').length}</p>
               </div>
               <div className="bg-blue-500/20 border border-blue-500/30 rounded-full p-2 sm:p-3">
                 <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-400" />
@@ -1234,7 +1275,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         )}
         </>
         ) : (
-          <SettingsSection appointments={appointments} onNewAppointment={onNewAppointment} addNotification={addNotification} />
+          <SettingsSection 
+            appointments={appointments} 
+            onNewAppointment={onNewAppointment} 
+            addNotification={addNotification} 
+            onDeleteAppointment={onDeleteAppointment}
+          />
         )}
 
 
@@ -1813,7 +1859,8 @@ const SettingsSection: React.FC<{
   appointments: Appointment[]; 
   onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
   addNotification?: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
-}> = ({ appointments, onNewAppointment, addNotification: addNotificationProp }) => {
+  onDeleteAppointment: (id: string) => void;
+}> = ({ appointments, onNewAppointment, addNotification: addNotificationProp, onDeleteAppointment }) => {
   const [fridayStart, setFridayStart] = useState('');
   const [fridayEnd, setFridayEnd] = useState('');
   const [saturdayStart, setSaturdayStart] = useState('');
@@ -1994,55 +2041,81 @@ const SettingsSection: React.FC<{
       <h3 className="text-xl sm:text-2xl font-bold text-white mb-2 sm:mb-3 text-center">Configuraciones</h3>
       <p className="text-gray-400 text-sm text-center">Los rangos se guardan en el servidor y se sincronizan en tiempo real. Ya están disponibles para todos los clientes.</p>
 
-      {/* Switches para activar/desactivar días */}
-      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
-        <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
-          <Calendar className="h-4 w-4 text-purple-300 mr-2" />
-          Disponibilidad de días
-        </h4>
-        <p className="text-gray-400 text-sm text-center mb-4">
-          Activa o desactiva los días de atención. Los días desactivados aparecerán como cerrados para los clientes.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Switch Viernes */}
-          <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
-            <div>
-              <p className="font-medium text-white">Viernes</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {availability.friday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
-              </p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={availability.friday}
-                onChange={(e) => handleToggleDay('friday', e.target.checked)}
-                disabled={availabilityLoading}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-            </label>
+      {/* Contenedor lado a lado para Disponibilidad de días y Deshabilitar Horarios */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Columna Izquierda: Disponibilidad de días (Viernes y Sábado apilados verticalmente) */}
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6 flex flex-col justify-between">
+          <div>
+            <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+              <Calendar className="h-4 w-4 text-purple-300 mr-2" />
+              Disponibilidad de días
+            </h4>
+            <p className="text-gray-400 text-sm text-center mb-4">
+              Activa o desactiva los días de atención. Los días desactivados aparecerán como cerrados para los clientes.
+            </p>
           </div>
+          <div className="flex flex-col gap-4 mt-auto">
+            {/* Switch Viernes */}
+            <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
+              <div>
+                <p className="font-medium text-white">Viernes</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {availability.friday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={availability.friday}
+                  onChange={(e) => handleToggleDay('friday', e.target.checked)}
+                  disabled={availabilityLoading}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
+            </div>
 
-          {/* Switch Sábado */}
-          <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
-            <div>
-              <p className="font-medium text-white">Sábado</p>
-              <p className="text-xs text-gray-400 mt-1">
-                {availability.saturday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
-              </p>
+            {/* Switch Sábado */}
+            <div className="flex items-center justify-between bg-gray-700/50 border border-gray-600 rounded-xl p-4">
+              <div>
+                <p className="font-medium text-white">Sábado</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {availability.saturday ? 'Disponible para clientes' : 'Cerrado - No disponible'}
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={availability.saturday}
+                  onChange={(e) => handleToggleDay('saturday', e.target.checked)}
+                  disabled={availabilityLoading}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={availability.saturday}
-                onChange={(e) => handleToggleDay('saturday', e.target.checked)}
-                disabled={availabilityLoading}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-            </label>
           </div>
+        </div>
+
+        {/* Columna Derecha: Deshabilitar Horario */}
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6 flex flex-col justify-between">
+          <div>
+            <h4 className="text-lg font-semibold text-white mb-4 flex items-center justify-center">
+              <Ban className="h-4 w-4 text-red-400 mr-2" />
+              Deshabilitar Horario (Marcar como Cerrado)
+            </h4>
+            <ClosedSlotForm
+              appointments={appointments}
+              onNewAppointment={onNewAppointment}
+              onDeleteAppointment={onDeleteAppointment}
+              ranges={ranges as CustomTimeRanges}
+              availability={availability}
+              addNotification={addNotification}
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-4 text-center">
+            Bloquea un horario para que los clientes no puedan reservarlo. Se mostrará en la lista de turnos como Cerrado.
+          </p>
         </div>
       </div>
 
@@ -2174,6 +2247,8 @@ const SettingsSection: React.FC<{
         />
         <p className="text-xs text-gray-400 mt-2 text-center">Crea un turno manual en horario y media (10:30, 11:30, etc.). Se refleja en la grilla y en la vista de clientes.</p>
       </div>
+
+
 
       {/* Edición de precios de servicios - Al final */}
       <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6">
@@ -2806,3 +2881,133 @@ const BansSection: React.FC<BansSectionProps> = ({
     </div>
   );
 };
+
+interface ClosedSlotFormProps {
+  appointments: Appointment[];
+  onNewAppointment: (appointment: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onDeleteAppointment: (id: string) => void;
+  ranges: CustomTimeRanges;
+  availability: { friday: boolean; saturday: boolean };
+  addNotification: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
+}
+
+function ClosedSlotForm({ appointments, onNewAppointment, onDeleteAppointment, ranges, availability, addNotification }: ClosedSlotFormProps) {
+  const [day, setDay] = useState<'friday' | 'saturday'>('friday');
+  const [loadingTime, setLoadingTime] = useState<string | null>(null);
+
+  const selectedDate = day === 'friday' 
+    ? formatDate(getNextFriday())
+    : formatDate(getNextSaturday());
+
+  const allPossibleSlots = day === 'friday'
+    ? ["18:00", "19:00", "20:00", "21:00"]
+    : ["14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00"];
+
+  const blockedAppointments = appointments.filter(
+    apt => apt.date === selectedDate && apt.customerName === 'CERRADO' && apt.status === 'confirmed'
+  );
+  
+  const blockedMap = new Map(blockedAppointments.map(apt => [apt.time, apt.id]));
+
+  const handleToggleSlot = async (timeSlot: string) => {
+    const blockedId = blockedMap.get(timeSlot);
+    
+    if (blockedId) {
+      // Si está bloqueado, se desbloquea (se elimina el turno CERRADO)
+      setLoadingTime(timeSlot);
+      try {
+        await onDeleteAppointment(blockedId);
+      } catch (err) {
+        addNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'No se pudo habilitar el horario.'
+        });
+      } finally {
+        setLoadingTime(null);
+      }
+    } else {
+      // Si está abierto, se bloquea (se crea un turno CERRADO)
+      setLoadingTime(timeSlot);
+      try {
+        await onNewAppointment({
+          customerName: 'CERRADO',
+          customerPhone: '0000000000',
+          customerEmail: '',
+          date: selectedDate,
+          time: timeSlot,
+          status: 'confirmed',
+          notes: 'Horario bloqueado por el administrador',
+          service: {
+            id: '',
+            name: 'Cerrado',
+            price: 0,
+            duration: 60,
+            icon: '🔒',
+            description: 'Bloqueado por el administrador'
+          }
+        });
+      } catch (err) {
+        addNotification({
+          type: 'error',
+          title: 'Error',
+          message: 'No se pudo deshabilitar el horario.'
+        });
+      } finally {
+        setLoadingTime(null);
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-4 w-full">
+      <div className="flex justify-center mb-4">
+        <div className="inline-flex rounded-xl bg-gray-900/60 p-1 border border-gray-700">
+          <button
+            type="button"
+            onClick={() => setDay('friday')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${day === 'friday' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            Viernes ({formatDate(getNextFriday())})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDay('saturday')}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${day === 'saturday' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+          >
+            Sábado ({formatDate(getNextSaturday())})
+          </button>
+        </div>
+      </div>
+
+      <div className="text-center mb-2">
+        <p className="text-xs text-gray-400">
+          Toca un horario para alternar su estado. Los horarios en <span className="text-red-400 font-bold">Rojo</span> están cerrados/bloqueados.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[260px] overflow-y-auto p-2 bg-gray-900/40 rounded-xl border border-gray-700/50">
+        {allPossibleSlots.map(t => {
+          const isBlocked = blockedMap.has(t);
+          const isLoading = loadingTime === t;
+          return (
+            <button
+              key={t}
+              onClick={() => handleToggleSlot(t)}
+              disabled={isLoading}
+              className={`
+                px-3 py-3 rounded-xl text-sm font-bold border transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50
+                ${isBlocked 
+                  ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-600 hover:text-white hover:border-red-600' 
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-600 hover:text-white hover:border-emerald-600'
+                }
+              `}
+            >
+              {isBlocked ? '🔒' : '🔓'} {t} hs
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

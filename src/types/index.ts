@@ -30,6 +30,7 @@ export interface TimeSlot {
   available: boolean;
   appointmentId?: string;
   isBreak?: boolean;
+  isClosed?: boolean;
 }
 
 export interface AvailableDay {

@@ -39,8 +39,19 @@ export const TimeSlotGrid: React.FC<TimeSlotGridProps> = ({
           </div>
           
           {!slot.available && (
-            <div className="absolute inset-0 flex items-center justify-center bg-red-900/50 bg-opacity-80 rounded-xl sm:rounded-2xl border border-red-500/30">
-              <span className="text-xs font-medium text-red-400">Ocupado</span>
+            <div className={`absolute inset-0 flex flex-col items-center justify-center rounded-xl sm:rounded-2xl border ${
+              slot.isClosed 
+                ? 'bg-gray-800/95 border-gray-700' 
+                : 'bg-red-900/50 bg-opacity-80 border-red-500/30'
+            }`}>
+              {slot.isClosed && (
+                <span className="text-[10px] text-gray-500 font-bold mb-0.5 tracking-wider">
+                  {slot.time} HS
+                </span>
+              )}
+              <span className={`text-xs font-semibold ${slot.isClosed ? 'text-gray-400' : 'text-red-400'}`}>
+                {slot.isClosed ? 'Cerrado' : 'Ocupado'}
+              </span>
             </div>
           )}
           

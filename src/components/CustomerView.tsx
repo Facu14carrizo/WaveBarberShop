@@ -4,7 +4,7 @@ import { TimeSlotGrid } from './TimeSlotGrid';
 import { ServiceSelector } from './ServiceSelector';
 import { BookingForm } from './BookingForm';
 import { BackButton } from './BackButton';
-import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges } from '../utils/timeSlots';
+import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges, parseAppointmentDateTime } from '../utils/timeSlots';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useDayAvailability } from '../hooks/useDayAvailability';
 import { Appointment, Service } from '../types';
@@ -37,14 +37,46 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const availableDays = getAvailableDays(ranges as CustomTimeRanges, availability);
   const currentDay = availableDays.find(day => day.day === selectedDay)!;
 
+  useEffect(() => {
+    const today = new Date().getDay();
+    const fri = availableDays.find(d => d.day === 'friday');
+    const sat = availableDays.find(d => d.day === 'saturday');
+    
+    if ((fri?.isClosed || today === 6 || today === 0) && sat && !sat.isClosed) {
+      setSelectedDay('saturday');
+    } else if (sat?.isClosed && fri && !fri.isClosed) {
+      setSelectedDay('friday');
+    }
+  }, [ranges, availability, availableDays]);
+
   const selectedDate = selectedDay === 'friday'
     ? formatDate(getNextFriday())
     : formatDate(getNextSaturday());
 
-  const availableSlots = currentDay.slots.map(slot => ({
-    ...slot,
-    available: selectedService ? isSlotAvailable(selectedDate, slot.time, appointments) : false
-  }));
+  const availableSlots = currentDay.slots.map(slot => {
+    let available = false;
+    const isClosed = appointments.some(
+      apt => apt.date === selectedDate && apt.time === slot.time && apt.customerName === 'CERRADO' && apt.status === 'confirmed'
+    );
+
+    if (!isClosed && selectedService) {
+      const isFree = isSlotAvailable(selectedDate, slot.time, appointments);
+      if (isFree) {
+        const slotDate = parseAppointmentDateTime(selectedDate, slot.time, new Date());
+        if (slotDate) {
+          const now = new Date();
+          available = slotDate.getTime() > (now.getTime() - 5 * 60 * 1000);
+        } else {
+          available = true;
+        }
+      }
+    }
+    return {
+      ...slot,
+      available,
+      isClosed
+    };
+  });
 
   useEffect(() => {
     if (selectedService) {

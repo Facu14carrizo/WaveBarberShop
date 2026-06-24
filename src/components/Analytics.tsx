@@ -14,17 +14,17 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
 
   const data = React.useMemo(() => {
     const isEffectivePast = (a: Appointment) => {
-      if (a.status === 'cancelled' || a.status === 'no-show') return false;
+      if (a.status === 'cancelled' || a.status === 'no-show' || a.customerName === 'CERRADO') return false;
       const dt = parseAppointmentDateTime(a.date, a.time, a.createdAt);
       return !!dt && dt.getTime() < Date.now();
     };
 
-    // Reservas válidas para conteos: excluye cancelados y no-show
-    const validForCounts = (a: Appointment) => a.status !== 'cancelled' && a.status !== 'no-show';
+    // Reservas válidas para conteos: excluye cancelados y no-show y cerrados
+    const validForCounts = (a: Appointment) => a.status !== 'cancelled' && a.status !== 'no-show' && a.customerName !== 'CERRADO';
 
     const done = appointments.filter(isEffectivePast);
 
-    const totalAppointments = appointments.length;
+    const totalAppointments = appointments.filter(a => a.customerName !== 'CERRADO').length;
     const totalCuts = done.length;
     const totalRevenue = done.reduce((sum, a) => sum + a.service.price, 0);
     // Crecimiento mensual (ingresos mes actual vs mes anterior)

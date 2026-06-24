@@ -7,7 +7,6 @@ import { AdminLoginModal } from './components/AdminLoginModal';
 import { useAdminAuth } from './contexts/AdminAuthContext';
 import { supabase } from './lib/supabase';
 import { BackButton } from './components/BackButton';
-import { BackgroundMusic } from './components/BackgroundMusic';
 import { AppointmentBanner } from './components/AppointmentBanner';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { SEOHead } from './components/SEOHead';
@@ -17,6 +16,7 @@ import { useSupabaseAppointments } from './hooks/useSupabaseAppointments';
 import { useNotifications } from './hooks/useNotifications';
 import { scheduleReminders } from './utils/webhooks';
 import { X, RefreshCw, Calendar } from 'lucide-react';
+import { parseAppointmentDateTime } from './utils/timeSlots';
 
 if (import.meta.env.DEV) {
   void import('./utils/testWhatsApp');
@@ -28,14 +28,33 @@ function App() {
   const [view, setView] = useState<'customer' | 'owner'>('customer');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [navigationStack, setNavigationStack] = useState<('customer' | 'owner')[]>(['customer']);
-  const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(null);
+  const [upcomingAppointment, setUpcomingAppointment] = useState<Appointment | null>(() => {
+    const saved = localStorage.getItem('upcoming_appointment');
+    if (saved) {
+      try {
+        const apt = JSON.parse(saved) as Appointment;
+        if (apt.createdAt) apt.createdAt = new Date(apt.createdAt);
+        if (apt.updatedAt) apt.updatedAt = new Date(apt.updatedAt);
+        return apt;
+      } catch (e) {
+        console.error('Error loading saved appointment:', e);
+      }
+    }
+    return null;
+  });
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
-  // Modal states
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [reschedulingAppointment, setReschedulingAppointment] = useState<Appointment | null>(null);
+
+  // Resetear cualquier estado activo del cliente al montar la app para que inicie limpia
+  useEffect(() => {
+    setSelectedService(null);
+    setReschedulingAppointment(null);
+    setView('customer');
+  }, []);
 
   const {
     appointments,
@@ -45,6 +64,7 @@ function App() {
     restoreAppointment,
     permanentlyDeleteAppointment,
     loadDeletedAppointments,
+    loading,
     refresh: refreshAppointments
   } = useSupabaseAppointments();
   const { notifications, addNotification, removeNotification } = useNotifications();
@@ -64,57 +84,54 @@ function App() {
     });
   }, [isAdmin, signOut]);
 
-  // Check for upcoming appointment on load and when appointments change
+  // Check for upcoming appointment validity when appointments load
   useEffect(() => {
-    const checkUpcomingAppointment = () => {
-      const savedId = localStorage.getItem('upcoming_appointment_id');
-      if (savedId) {
-        // Find by exact ID match
-        const found = appointments.find(apt => apt.id === savedId);
+    // Clean up old individual keys if they exist
+    localStorage.removeItem('upcoming_appointment_id');
+    localStorage.removeItem('upcoming_appointment_name');
+    localStorage.removeItem('upcoming_appointment_phone');
+    localStorage.removeItem('upcoming_appointment_companions');
 
-        if (found) {
-          // Verify if it's still valid
-          const isValidStatus = ['confirmed', 'pending'].includes(found.status);
+    if (!upcomingAppointment) return;
 
-          if (isValidStatus) {
-            const savedName = localStorage.getItem('upcoming_appointment_name') || '';
-            const savedPhone = localStorage.getItem('upcoming_appointment_phone') || '';
-            const savedCompanionsRaw = localStorage.getItem('upcoming_appointment_companions');
-            let savedCompanions: string[] = [];
-            if (savedCompanionsRaw) {
-              try {
-                savedCompanions = JSON.parse(savedCompanionsRaw);
-              } catch (e) {
-                console.error(e);
-              }
-            }
+    // 1. Check if the appointment is in the past (e.g., older than now - 2 hours)
+    const aptDate = parseAppointmentDateTime(
+      upcomingAppointment.date,
+      upcomingAppointment.time,
+      upcomingAppointment.createdAt ? new Date(upcomingAppointment.createdAt) : new Date()
+    );
+    
+    const now = new Date();
+    if (aptDate && aptDate.getTime() < now.getTime() - 2 * 60 * 60 * 1000) {
+      localStorage.removeItem('upcoming_appointment');
+      setUpcomingAppointment(null);
+      return;
+    }
 
-            setUpcomingAppointment({
-              ...found,
-              customerName: savedName || found.customerName,
-              customerPhone: savedPhone || found.customerPhone,
-              additionalCustomerNames: savedCompanions.length > 0 ? savedCompanions : found.additionalCustomerNames,
-            });
-          } else {
-            // If status is not valid (completed/cancelled), remove it
-            localStorage.removeItem('upcoming_appointment_id');
-            localStorage.removeItem('upcoming_appointment_name');
-            localStorage.removeItem('upcoming_appointment_phone');
-            localStorage.removeItem('upcoming_appointment_companions');
-            setUpcomingAppointment(null);
-          }
-        } else {
-          // If we have appointments loaded but didn't find the saved one,
-          // it might have been deleted remotely?
-          // Only clear if we are sure we have loaded the relevant appointments.
+    // 2. If appointments list has loaded, check if it's still active
+    if (!loading) {
+      const found = appointments.find(apt => apt.id === upcomingAppointment.id);
+      
+      if (!found) {
+        // If not found in active slots, and it was created > 30 seconds ago, it was probably deleted/completed/cancelled
+        const createdTime = upcomingAppointment.createdAt 
+          ? new Date(upcomingAppointment.createdAt).getTime() 
+          : now.getTime();
+        const ageInMs = now.getTime() - createdTime;
+        if (ageInMs > 30000) {
+          localStorage.removeItem('upcoming_appointment');
+          setUpcomingAppointment(null);
+        }
+      } else {
+        // If found, update status if it changed
+        if (found.status !== upcomingAppointment.status) {
+          const updated = { ...upcomingAppointment, status: found.status };
+          localStorage.setItem('upcoming_appointment', JSON.stringify(updated));
+          setUpcomingAppointment(updated);
         }
       }
-    };
-
-    if (appointments.length > 0) {
-      checkUpcomingAppointment();
     }
-  }, [appointments]);
+  }, [appointments, loading, upcomingAppointment]);
 
   const handleViewChange = (newView: 'customer' | 'owner') => {
     if (newView === 'owner' && !adminAllowed) {
@@ -159,7 +176,6 @@ function App() {
     setShowLoginModal(false);
   };
 
-
   const handleGoBack = () => {
     if (navigationStack.length > 1) {
       const newStack = [...navigationStack];
@@ -180,9 +196,22 @@ function App() {
       setAdminAllowed(false);
     }
   };
+
   const handleNewAppointment = async (appointmentData: Omit<Appointment, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
       const newAppointment = await addAppointment(appointmentData);
+
+      // Si es un bloqueo administrativo (CERRADO) o se hace desde el panel de admin, evitar flujo de cliente
+      if (appointmentData.customerName === 'CERRADO' || view === 'owner') {
+        if (appointmentData.customerName !== 'CERRADO') {
+          addNotification({
+            type: 'success',
+            title: 'Sobreeturno Creado',
+            message: `El sobreturno de ${appointmentData.customerName} a las ${appointmentData.time} hs fue registrado con éxito.`
+          });
+        }
+        return newAppointment;
+      }
 
       // Si estábamos reagendando, cancelamos el turno anterior
       const isResched = !!reschedulingAppointment;
@@ -194,15 +223,12 @@ function App() {
         }
       }
 
-      // Save ID and details to local storage
-      localStorage.setItem('upcoming_appointment_id', newAppointment.id);
-      localStorage.setItem('upcoming_appointment_name', newAppointment.customerName);
-      localStorage.setItem('upcoming_appointment_phone', newAppointment.customerPhone);
-      if (newAppointment.additionalCustomerNames && newAppointment.additionalCustomerNames.length > 0) {
-        localStorage.setItem('upcoming_appointment_companions', JSON.stringify(newAppointment.additionalCustomerNames));
-      } else {
-        localStorage.removeItem('upcoming_appointment_companions');
-      }
+      // Save the complete appointment object to local storage
+      localStorage.setItem('upcoming_appointment', JSON.stringify(newAppointment));
+      localStorage.removeItem('upcoming_appointment_id');
+      localStorage.removeItem('upcoming_appointment_name');
+      localStorage.removeItem('upcoming_appointment_phone');
+      localStorage.removeItem('upcoming_appointment_companions');
 
       setUpcomingAppointment(newAppointment);
       setReschedulingAppointment(null);
@@ -258,12 +284,24 @@ function App() {
       await deleteAppointment(id);
 
       // If the deleted appointment is the one tracked locally, remove it
-      if (localStorage.getItem('upcoming_appointment_id') === id) {
-        localStorage.removeItem('upcoming_appointment_id');
-        setUpcomingAppointment(null);
+      const savedApt = localStorage.getItem('upcoming_appointment');
+      if (savedApt) {
+        try {
+          const parsed = JSON.parse(savedApt);
+          if (parsed.id === id) {
+            localStorage.removeItem('upcoming_appointment');
+            setUpcomingAppointment(null);
+          }
+        } catch (e) {
+          console.error(e);
+        }
       }
+      localStorage.removeItem('upcoming_appointment_id');
+      localStorage.removeItem('upcoming_appointment_name');
+      localStorage.removeItem('upcoming_appointment_phone');
+      localStorage.removeItem('upcoming_appointment_companions');
 
-      if (appointment) {
+      if (appointment && appointment.customerName !== 'CERRADO') {
         addNotification({
           type: 'info',
           title: 'Turno Eliminado',
@@ -351,12 +389,10 @@ function App() {
       return;
     }
 
-    // Guardar el servicio del turno actual antes de borrarlo
-    const previousService = upcomingAppointment.service;
-
     setIsCancelling(true);
     try {
       await deleteAppointment(upcomingAppointment.id, phoneToUse);
+      localStorage.removeItem('upcoming_appointment');
       localStorage.removeItem('upcoming_appointment_id');
       localStorage.removeItem('upcoming_appointment_name');
       localStorage.removeItem('upcoming_appointment_phone');
@@ -588,9 +624,6 @@ function App() {
         isLoading={isCancelling}
         requirePhoneInput={upcomingAppointment ? !upcomingAppointment.customerPhone : false}
       />
-
-      {/* Background Music */}
-      <BackgroundMusic />
 
       <DeveloperCredits />
     </div>

@@ -81,11 +81,20 @@ export const getAvailableDays = (
   const availability = dayAvailability || { friday: true, saturday: true };
   const days: AvailableDay[] = [];
 
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const fridayDate = getNextFriday();
+  const saturdayDate = getNextSaturday();
+
+  const isFridayPast = fridayDate < todayStart;
+  const isSaturdayPast = saturdayDate < todayStart;
+
   // Viernes
-  if (availability.friday) {
+  if (availability.friday && !isFridayPast) {
     const defaultSlots = generateTimeSlots('18:00', '21:00');
     const customRanges = custom || { friday: [], saturday: [] };
-    const customSlots = customRanges.friday
+    const customSlots = (customRanges.friday || [])
       .flatMap(r => generateTimeSlots(r.start, r.end));
     const combined = Array.from(new Set([...defaultSlots, ...customSlots])).sort(
       (a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b)
@@ -112,10 +121,10 @@ export const getAvailableDays = (
   }
 
   // Sábado
-  if (availability.saturday) {
+  if (availability.saturday && !isSaturdayPast) {
     const defaultSlots = generateTimeSlots('14:00', '21:00');
     const customRanges = custom || { friday: [], saturday: [] };
-    const customSlots = customRanges.saturday
+    const customSlots = (customRanges.saturday || [])
       .flatMap(r => generateTimeSlots(r.start, r.end));
     const combined = Array.from(new Set([...defaultSlots, ...customSlots])).sort(
       (a, b) => parseTimeToMinutes(a) - parseTimeToMinutes(b)
