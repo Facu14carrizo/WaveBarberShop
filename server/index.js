@@ -562,7 +562,7 @@ async function checkAndSendReminders() {
           : '';
         const service = apt.service_name || 'Servicio';
         
-        const message = `¡Recordatorio de tu turno de mañana! 💈\n\nTe esperamos mañana en *Wave Barber Shop*:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${apt.date}\nHora: ${apt.time} hs\n\n¡Que tengas un gran día! 🔥`;
+        const message = `¡Recordatorio de tu turno de mañana! 💈\n\nTe espero mañana en *Wave Barber Shop*:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${apt.date}\nHora: ${apt.time} hs\n\n¡Que tengas un gran día! 🔥`;
         
         try {
           await client.sendMessage(targetJid, message);

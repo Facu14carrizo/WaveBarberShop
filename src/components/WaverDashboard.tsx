@@ -79,6 +79,7 @@ export const WaverDashboard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showDelaySettings, setShowDelaySettings] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const handleStartEdit = (rule: Rule) => {
     setEditingRuleId(rule.id);
@@ -256,8 +257,12 @@ export const WaverDashboard: React.FC = () => {
     }
   };
 
-  const handleLogout = async () => {
-    if (!confirm('¿Estás seguro de que quieres cerrar la sesión de WhatsApp? Deberás escanear el QR de nuevo.')) return;
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    setShowLogoutConfirm(false);
     setLoading(true);
     try {
       await fetch(`${SOCKET_URL}/api/logout`, { method: 'POST' });
@@ -386,7 +391,7 @@ export const WaverDashboard: React.FC = () => {
                   <p className="text-xs text-gray-400">Respondiendo automáticamente mensajes de clientes de la barbería.</p>
                 </div>
                 <button 
-                  onClick={handleLogout} 
+                  onClick={handleLogoutClick} 
                   disabled={loading}
                   className="px-4 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/20 hover:border-red-500/30 text-red-400 rounded-lg text-xs font-semibold transition-all"
                 >
@@ -721,6 +726,41 @@ export const WaverDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Custom Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-red-400 mb-4">
+              <div className="bg-red-500/10 p-2.5 rounded-xl border border-red-500/20">
+                <Power className="h-6 w-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">¿Cerrar sesión de WhatsApp?</h3>
+            </div>
+            
+            <p className="text-sm text-gray-300 mb-6 leading-relaxed">
+              ¿Estás seguro de que quieres cerrar la sesión? Para volver a usar el bot deberás escanear el código QR nuevamente desde tu celular.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 text-sm font-semibold text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 border border-gray-600/30 hover:border-gray-600 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogout}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-500 border border-red-700 hover:border-red-600 rounded-xl shadow-lg shadow-red-950/35 transition-all"
+              >
+                Cerrar Sesión
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
