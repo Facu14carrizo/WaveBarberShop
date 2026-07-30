@@ -113,6 +113,41 @@ let client;
 function initWhatsApp() {
   updateStatus('CONNECTING');
   
+  const isWin = process.platform === 'win32';
+  const chromeArgs = isWin ? [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu'
+  ] : [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-first-run',
+    '--disable-extensions',
+    '--disable-software-rasterizer',
+    '--js-flags="--max-old-space-size=120"',
+    '--disable-dev-tools',
+    '--disable-features=Translate,BackForwardCache,SharedArrayBuffer',
+    '--disable-default-apps',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-client-side-phishing-detection',
+    '--disable-ipc-flooding-protection',
+    '--disable-hang-monitor',
+    '--disable-popup-blocking',
+    '--disable-prompt-on-repost',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--force-color-profile=srgb',
+    '--metrics-recording-only',
+    '--no-default-browser-check',
+    '--password-store=basic',
+    '--use-mock-keychain'
+  ];
+
   client = new Client({
     authStrategy: new LocalAuth({
       dataPath: path.join(__dirname, '.wwebjs_auth')
@@ -120,39 +155,12 @@ function initWhatsApp() {
     puppeteer: {
       headless: true,
       // Usa Chrome local en Windows, y la ruta por defecto o del entorno en Linux (producción)
-      ...(process.platform === 'win32' ? {
+      ...(isWin ? {
         executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
       } : process.env.PUPPETEER_EXECUTABLE_PATH ? {
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
       } : {}),
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--disable-extensions',
-        '--disable-software-rasterizer',
-        '--js-flags="--max-old-space-size=120"',
-        '--disable-dev-tools',
-        '--disable-features=Translate,BackForwardCache,SharedArrayBuffer',
-        '--disable-default-apps',
-        '--disable-background-networking',
-        '--disable-background-timer-throttling',
-        '--disable-backgrounding-occluded-windows',
-        '--disable-client-side-phishing-detection',
-        '--disable-ipc-flooding-protection',
-        '--disable-hang-monitor',
-        '--disable-popup-blocking',
-        '--disable-prompt-on-repost',
-        '--disable-renderer-backgrounding',
-        '--disable-sync',
-        '--force-color-profile=srgb',
-        '--metrics-recording-only',
-        '--no-default-browser-check',
-        '--password-store=basic',
-        '--use-mock-keychain'
-      ]
+      args: chromeArgs
     }
   });
 
