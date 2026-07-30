@@ -474,7 +474,7 @@ async function sendConfirmationMessage(appointment) {
     }
   }
 
-  const message = `Tu turno se agendó con exito perro: \n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${dateFormatted}\nHora: ${time} hs\n\n¡Te espero bro! 💈🔥`;
+  const message = `Tu turno se agendó con exito💥\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${dateFormatted}\nHora: ${time} hs\n\n¡Te espero! 💈🔥`;
   
   try {
     await client.sendMessage(targetJid, message);
@@ -483,6 +483,128 @@ async function sendConfirmationMessage(appointment) {
   } catch (err) {
     console.error(`[WaveBro] Error al enviar confirmación a ${targetJid}:`, err);
     logActivity('system', 'System', `Error enviando confirmación a ${name} (${phone})`, err.message, false);
+  }
+}
+
+function parseAppointmentDateTime(dateLabel, time, createdAtString) {
+  try {
+    const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const monthName = m[2].toLowerCase();
+    const monthMap = {
+      'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
+      'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8,
+      'octubre': 9, 'noviembre': 10, 'diciembre': 11
+    };
+    const month = monthMap[monthName];
+    if (month == null) return null;
+    const [hour, minute] = time.split(':').map(Number);
+    
+    const createdAt = new Date(createdAtString);
+    const dateMonth = month;
+    const createdMonth = createdAt.getMonth();
+    let year = createdAt.getFullYear();
+
+    if (dateMonth < createdMonth && (createdMonth - dateMonth) > 6) {
+      year++;
+    }
+
+    return new Date(year, dateMonth, day, hour || 0, minute || 0, 0, 0);
+  } catch (e) {
+    return null;
+  }
+}
+
+async function checkAndSendReminders() {
+  if (!supabase || !client || botStatus !== 'CONNECTED') return;
+  
+  try {
+    // Buscamos turnos confirmados que falten enviar algún recordatorio
+    const { data: appointments, error } = await supabase
+      .from('appointments')
+      .select('*')
+      .eq('status', 'confirmed')
+      .or('reminder_sent_1day.eq.false,reminder_sent_1hour.eq.false');
+      
+    if (error) {
+      console.error('[WaveBro Reminders] Error cargando turnos para recordatorios:', error);
+      return;
+    }
+    
+    if (!appointments || appointments.length === 0) return;
+    
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    for (const apt of appointments) {
+      const aptDate = parseAppointmentDateTime(apt.date, apt.time, apt.created_at);
+      if (!aptDate) continue;
+      
+      const diffMs = aptDate.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      
+      const phone = apt.customer_phone;
+      if (!phone) continue;
+      
+      const targetJid = formatPhoneNumberToJID(phone);
+      if (!targetJid) continue;
+      
+      // 1. Recordatorio 1 día antes a partir de las 9:00 AM
+      const isTomorrow = tomorrow.getFullYear() === aptDate.getFullYear() &&
+                         tomorrow.getMonth() === aptDate.getMonth() &&
+                         tomorrow.getDate() === aptDate.getDate();
+                         
+      if (isTomorrow && now.getHours() >= 9 && !apt.reminder_sent_1day) {
+        const priceFormatted = apt.service_price 
+          ? `$${Number(apt.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+          : '';
+        const service = apt.service_name || 'Servicio';
+        
+        const message = `¡Recordatorio de tu turno de mañana! 💈\n\nTe esperamos mañana en *Wave Barber Shop*:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${apt.date}\nHora: ${apt.time} hs\n\n¡Que tengas un gran día! 🔥`;
+        
+        try {
+          await client.sendMessage(targetJid, message);
+          console.log(`[WaveBro Reminders] Recordatorio de 1 día enviado con éxito a: ${targetJid}`);
+          
+          await supabase
+            .from('appointments')
+            .update({ reminder_sent_1day: true })
+            .eq('id', apt.id);
+            
+          logActivity('system', 'System', `Recordatorio 1 día enviado a ${apt.customer_name} (${phone})`, message);
+        } catch (err) {
+          console.error(`[WaveBro Reminders] Error enviando recordatorio 1 día a ${targetJid}:`, err);
+        }
+      }
+      
+      // 2. Recordatorio 2 horas antes (usamos el flag 'reminder_sent_1hour' para evitar migraciones de base de datos)
+      if (diffHours > 0 && diffHours <= 2.0 && !apt.reminder_sent_1hour) {
+        const priceFormatted = apt.service_price 
+          ? `$${Number(apt.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+          : '';
+        const service = apt.service_name || 'Servicio';
+        
+        const message = `¡Falta poco para tu turno! 💈\n\nRecordá que hoy tenés un turno en *Wave Barber Shop* en menos de 2 horas:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nHora: ${apt.time} hs\n\n¡Te espero! 🔥`;
+        
+        try {
+          await client.sendMessage(targetJid, message);
+          console.log(`[WaveBro Reminders] Recordatorio de 2 horas enviado con éxito a: ${targetJid}`);
+          
+          await supabase
+            .from('appointments')
+            .update({ reminder_sent_1hour: true })
+            .eq('id', apt.id);
+            
+          logActivity('system', 'System', `Recordatorio 2 horas enviado a ${apt.customer_name} (${phone})`, message);
+        } catch (err) {
+          console.error(`[WaveBro Reminders] Error enviando recordatorio 2 horas a ${targetJid}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[WaveBro Reminders] Error procesando recordatorios:', err);
   }
 }
 
@@ -508,4 +630,9 @@ function listenToAppointments() {
     .subscribe((status) => {
       console.log(`[WaveBro] Estado suscripción Supabase Realtime: ${status}`);
     });
+
+  // Chequear recordatorios cada 5 minutos
+  setInterval(checkAndSendReminders, 5 * 60 * 1000);
+  // Y correr un chequeo inicial al iniciar conexión
+  setTimeout(checkAndSendReminders, 10000);
 }
