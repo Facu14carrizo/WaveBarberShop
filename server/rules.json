@@ -1,0 +1,23 @@
+[
+  {
+    "id": "1",
+    "trigger": "turno",
+    "reply": "Fíjate los turnos disponibles en la app 💈 https://wave-barbershop.netlify.app ",
+    "type": "contains",
+    "active": true
+  },
+  {
+    "id": "2",
+    "trigger": "precio",
+    "reply": "Podes ver los precios en la app bro\n https://wave-barbershop.netlify.app 💰",
+    "type": "contains",
+    "active": true
+  },
+  {
+    "id": "3",
+    "trigger": "horario",
+    "reply": "En la app podes ver siempre los horarios disponibles\n https://wave-barbershop.netlify.app ⏰ ",
+    "type": "contains",
+    "active": true
+  }
+]

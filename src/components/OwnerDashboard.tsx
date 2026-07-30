@@ -9,6 +9,7 @@ import { Appointment, Service } from '../types';
 import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
 import { ConfirmBanModal } from './ConfirmBanModal';
+import { WaverDashboard } from './WaverDashboard';
 import { useBans } from '../hooks/useBans';
 import { useDebts } from '../hooks/useDebts';
 
@@ -1049,19 +1050,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         ) : activeTab === 'debts' ? (
           <DebtsSection appointments={appointments} addNotification={addNotification} />
         ) : activeTab === 'bot' ? (
-          <div className="text-center py-8 sm:py-12 md:py-16 animate-fade-in">
-            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8 md:p-12 shadow-lg max-w-md mx-auto">
-              <div className="bg-gray-700 border border-gray-600 rounded-full w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
-                <Bot className="h-8 w-8 sm:h-10 sm:w-10 text-blue-400" />
-              </div>
-              <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
-                Asistente Virtual Bot
-              </h3>
-              <p className="text-sm sm:text-base text-gray-400">
-                Sección en desarrollo. Próximamente podrás configurar las automatizaciones del bot de WhatsApp para reservas aquí.
-              </p>
-            </div>
-          </div>
+          <WaverDashboard />
         ) : activeTab === 'bans' ? (
           <BansSection 
             bannedIPs={bannedIPs}
