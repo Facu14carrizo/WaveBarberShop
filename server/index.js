@@ -133,7 +133,25 @@ function initWhatsApp() {
         '--no-first-run',
         '--disable-extensions',
         '--disable-software-rasterizer',
-        '--js-flags="--max-old-space-size=180"'
+        '--js-flags="--max-old-space-size=120"',
+        '--disable-dev-tools',
+        '--disable-features=Translate,BackForwardCache,SharedArrayBuffer',
+        '--disable-default-apps',
+        '--disable-background-networking',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-client-side-phishing-detection',
+        '--disable-ipc-flooding-protection',
+        '--disable-hang-monitor',
+        '--disable-popup-blocking',
+        '--disable-prompt-on-repost',
+        '--disable-renderer-backgrounding',
+        '--disable-sync',
+        '--force-color-profile=srgb',
+        '--metrics-recording-only',
+        '--no-default-browser-check',
+        '--password-store=basic',
+        '--use-mock-keychain'
       ]
     }
   });
