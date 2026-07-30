@@ -19,7 +19,9 @@ ALTER TABLE admin_allowlist FORCE ROW LEVEL SECURITY;
 
 -- ⚠️ CAMBIÁ ESTE EMAIL por el del dueño de la barbería:
 INSERT INTO admin_allowlist (email)
-VALUES ('Diazulises890@gmail.com')
+VALUES 
+  ('Diazulises890@gmail.com'),
+  ('admin@admin.com')
 ON CONFLICT (email) DO NOTHING;
 
 -- ¿Es admin el usuario autenticado?

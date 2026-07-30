@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical, DollarSign, Plus, Smile } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical, DollarSign, Plus, Smile, Bot } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -10,6 +10,7 @@ import { buildWhatsAppLink } from '../utils/phone';
 import { Analytics } from './Analytics';
 import { ConfirmBanModal } from './ConfirmBanModal';
 import { useBans } from '../hooks/useBans';
+import { useDebts } from '../hooks/useDebts';
 
 interface OwnerDashboardProps {
   appointments: Appointment[];
@@ -35,12 +36,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   addNotification: addNotificationProp
 }) => {
   const SHOW_STATUS = false;
-  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans' | 'debts'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'analytics' | 'settings' | 'trash' | 'bans' | 'debts' | 'bot'>('appointments');
   const [deletedAppointments, setDeletedAppointments] = useState<Appointment[]>([]);
   const [loadingTrash, setLoadingTrash] = useState(false);
   const { ranges } = useSupabaseCustomTimeRanges();
   const { availability } = useDayAvailability();
   const { banIP, banPhone, banEmail, unbanIP, bannedIPs, isIPBanned, isPhoneBanned, isEmailBanned, refresh: refreshBans } = useBans();
+  const { debts: globalDebts, addDebt: addGlobalDebt } = useDebts();
   const { addNotification: addNotificationLocal } = useNotifications();
   const addNotification = addNotificationProp || addNotificationLocal;
   const [dayFilter, setDayFilter] = useState<'all' | 'friday' | 'saturday' | 'sobreturno'>('all');
@@ -100,6 +102,48 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
 
     return () => clearInterval(interval);
   }, []);
+
+  const handleCancelBan = () => {
+    setBanModalOpen(false);
+    setAppointmentToBan(null);
+  };
+
+  const handleRegisterDebt = async (appointment: Appointment) => {
+    try {
+      const alreadyExists = globalDebts.some(d => d.appointmentId === appointment.id);
+      if (alreadyExists) {
+        addNotification({
+          type: 'warning',
+          title: 'Ya Registrado',
+          message: `Este turno de ${appointment.customerName} ya está anotado como pendiente.`
+        });
+        return;
+      }
+
+      await addGlobalDebt({
+        appointmentId: appointment.id,
+        customerName: appointment.customerName,
+        customerPhone: appointment.customerPhone || undefined,
+        amount: appointment.service.price,
+        notes: `Corte: ${appointment.service.name}. Anotado desde la lista de turnos pasados.`,
+        date: appointment.date,
+        isPaid: false
+      });
+
+      addNotification({
+        type: 'success',
+        title: 'Deuda Anotada',
+        message: `Se registró la deuda de $${appointment.service.price.toLocaleString()} para ${appointment.customerName} correctamente.`
+      });
+    } catch (error) {
+      console.error('Error registering debt:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error',
+        message: 'No se pudo registrar la deuda. Intente nuevamente.'
+      });
+    }
+  };
 
   // Cargar turnos eliminados cuando se cambia a la pestaña de papelera
   React.useEffect(() => {
@@ -428,62 +472,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     }
   };
 
-  const handleCancelBan = () => {
-    setBanModalOpen(false);
-    setAppointmentToBan(null);
-  };
 
-  const handleRegisterDebt = (appointment: Appointment) => {
-    try {
-      const saved = localStorage.getItem('wavebarber_pending_payments');
-      let currentDebts: any[] = [];
-      if (saved) {
-        try {
-          currentDebts = JSON.parse(saved);
-        } catch (e) {
-          console.error('Error parsing debts from localStorage:', e);
-        }
-      }
-
-      const alreadyExists = currentDebts.some(d => d.appointmentId === appointment.id);
-      if (alreadyExists) {
-        addNotification({
-          type: 'warning',
-          title: 'Ya Registrado',
-          message: `Este turno de ${appointment.customerName} ya está anotado como pendiente.`
-        });
-        return;
-      }
-
-      const newDebt = {
-        id: Math.random().toString(36).substr(2, 9),
-        appointmentId: appointment.id,
-        customerName: appointment.customerName,
-        customerPhone: appointment.customerPhone || undefined,
-        amount: appointment.service.price,
-        notes: `Corte: ${appointment.service.name}. Anotado desde la lista de turnos pasados.`,
-        date: appointment.date,
-        isPaid: false,
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedDebts = [newDebt, ...currentDebts];
-      localStorage.setItem('wavebarber_pending_payments', JSON.stringify(updatedDebts));
-
-      addNotification({
-        type: 'success',
-        title: 'Deuda Anotada',
-        message: `Se registró la deuda de $${appointment.service.price.toLocaleString()} para ${appointment.customerName} correctamente.`
-      });
-    } catch (error) {
-      console.error('Error registering debt:', error);
-      addNotification({
-        type: 'error',
-        title: 'Error',
-        message: 'No se pudo registrar la deuda. Intente nuevamente.'
-      });
-    }
-  };
 
   const handleUndo = () => {
     if (!lastAction) return;
@@ -988,14 +977,14 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </button>
             <button
               onClick={() => setActiveTab('analytics')}
-              className={`flex items-center justify-center space-x-1 sm:space-x-2 px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
                 activeTab === 'analytics'
                   ? 'bg-purple-600 text-white shadow-lg'
                   : 'text-gray-300 hover:bg-gray-700 hover:text-white'
               }`}
+              title="Métricas"
             >
               <BarChart3 className="h-4 w-4" />
-              <span className="text-xs sm:text-sm">Métricas</span>
             </button>
             <button
               onClick={() => setActiveTab('debts')}
@@ -1041,6 +1030,17 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             >
               <Shield className="h-4 w-4" />
             </button>
+            <button
+              onClick={() => setActiveTab('bot')}
+              className={`flex items-center justify-center px-2.5 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl font-medium transition-all duration-300 flex-1 ${
+                activeTab === 'bot'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+              }`}
+              title="Asistente Bot"
+            >
+              <Bot className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -1048,6 +1048,20 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
           <Analytics appointments={appointments} />
         ) : activeTab === 'debts' ? (
           <DebtsSection appointments={appointments} addNotification={addNotification} />
+        ) : activeTab === 'bot' ? (
+          <div className="text-center py-8 sm:py-12 md:py-16 animate-fade-in">
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 sm:p-8 md:p-12 shadow-lg max-w-md mx-auto">
+              <div className="bg-gray-700 border border-gray-600 rounded-full w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center mx-auto mb-4 sm:mb-6">
+                <Bot className="h-8 w-8 sm:h-10 sm:w-10 text-blue-400" />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4">
+                Asistente Virtual Bot
+              </h3>
+              <p className="text-sm sm:text-base text-gray-400">
+                Sección en desarrollo. Próximamente podrás configurar las automatizaciones del bot de WhatsApp para reservas aquí.
+              </p>
+            </div>
+          </div>
         ) : activeTab === 'bans' ? (
           <BansSection 
             bannedIPs={bannedIPs}
@@ -1300,7 +1314,7 @@ const DebtsSection: React.FC<{
   appointments: Appointment[];
   addNotification: (notification: { type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string; duration?: number }) => void;
 }> = ({ appointments, addNotification }) => {
-  const [debts, setDebts] = useState<any[]>([]);
+  const { debts, addDebt, markAsPaid, markAsPending, deleteDebt, importDebts } = useDebts();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
@@ -1320,24 +1334,7 @@ const DebtsSection: React.FC<{
   const [showBackup, setShowBackup] = useState(false);
   const [backupText, setBackupText] = useState('');
 
-  // Load from local storage
-  useEffect(() => {
-    const saved = localStorage.getItem('wavebarber_pending_payments');
-    if (saved) {
-      try {
-        setDebts(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error al cargar deudas de localStorage:', e);
-      }
-    }
-  }, []);
-
-  const saveDebts = (updatedDebts: any[]) => {
-    setDebts(updatedDebts);
-    localStorage.setItem('wavebarber_pending_payments', JSON.stringify(updatedDebts));
-  };
-
-  const handleAddDebt = (e: React.FormEvent) => {
+  const handleAddDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
       addNotification({
@@ -1356,19 +1353,14 @@ const DebtsSection: React.FC<{
       return;
     }
 
-    const newDebt = {
-      id: Math.random().toString(36).substr(2, 9),
+    await addDebt({
       customerName: name.trim(),
       customerPhone: phone.trim() || undefined,
       amount: parseFloat(amount),
       notes: notes.trim() || undefined,
       date,
-      isPaid: false,
-      createdAt: new Date().toISOString()
-    };
-
-    const updated = [newDebt, ...debts];
-    saveDebts(updated);
+      isPaid: false
+    });
 
     // Reset form
     setName('');
@@ -1384,18 +1376,8 @@ const DebtsSection: React.FC<{
     });
   };
 
-  const handleMarkAsPaid = (id: string) => {
-    const updated = debts.map(d => {
-      if (d.id === id) {
-        return {
-          ...d,
-          isPaid: true,
-          paidAt: new Date().toISOString()
-        };
-      }
-      return d;
-    });
-    saveDebts(updated);
+  const handleMarkAsPaid = async (id: string) => {
+    await markAsPaid(id);
     addNotification({
       type: 'success',
       title: 'Pago Registrado',
@@ -1403,18 +1385,8 @@ const DebtsSection: React.FC<{
     });
   };
 
-  const handleMarkAsPending = (id: string) => {
-    const updated = debts.map(d => {
-      if (d.id === id) {
-        return {
-          ...d,
-          isPaid: false,
-          paidAt: undefined
-        };
-      }
-      return d;
-    });
-    saveDebts(updated);
+  const handleMarkAsPending = async (id: string) => {
+    await markAsPending(id);
     addNotification({
       type: 'info',
       title: 'Cuenta Pendiente',
@@ -1422,14 +1394,13 @@ const DebtsSection: React.FC<{
     });
   };
 
-  const handleDeleteDebt = (id: string) => {
+  const handleDeleteDebt = async (id: string) => {
     if (window.confirm('¿Estás seguro que deseas eliminar este registro permanentemente?')) {
-      const updated = debts.filter(d => d.id !== id);
-      saveDebts(updated);
+      await deleteDebt(id);
       addNotification({
         type: 'info',
         title: 'Registro Eliminado',
-        message: 'El registro fue borrado de la base de datos local.'
+        message: 'El registro fue borrado de la base de datos.'
       });
     }
   };
@@ -1444,7 +1415,7 @@ const DebtsSection: React.FC<{
     });
   };
 
-  const handleImportBackup = () => {
+  const handleImportBackup = async () => {
     if (!backupText.trim()) {
       addNotification({
         type: 'error',
@@ -1458,7 +1429,7 @@ const DebtsSection: React.FC<{
       if (!Array.isArray(parsed)) {
         throw new Error('El formato debe ser una lista de registros.');
       }
-      saveDebts(parsed);
+      await importDebts(parsed);
       setBackupText('');
       setShowBackup(false);
       addNotification({
