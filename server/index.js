@@ -131,7 +131,9 @@ function initWhatsApp() {
         '--disable-dev-shm-usage',
         '--disable-gpu',
         '--no-first-run',
-        '--disable-extensions'
+        '--disable-extensions',
+        '--disable-software-rasterizer',
+        '--js-flags="--max-old-space-size=180"'
       ]
     }
   });
