@@ -19,7 +19,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 
-const SOCKET_URL = 'http://localhost:5000';
+const SOCKET_URL = 'https://wavebarbershop.onrender.com';
 
 interface Rule {
   id: string;
