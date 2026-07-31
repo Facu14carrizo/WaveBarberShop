@@ -174,7 +174,7 @@ export function useSupabaseCustomTimeRanges() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('custom_time_ranges_changes')
+      .channel('custom_time_ranges_changes_' + Math.random().toString(36).substring(2, 9))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'custom_time_ranges' }, () => {
         loadFromServer()
       })

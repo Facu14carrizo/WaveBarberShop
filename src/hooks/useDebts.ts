@@ -89,7 +89,7 @@ export function useDebts() {
   // Suscripción en tiempo real a Supabase
   useEffect(() => {
     const channel = supabase
-      .channel('debts_changes')
+      .channel('debts_changes_' + Math.random().toString(36).substring(2, 9))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'debts' },

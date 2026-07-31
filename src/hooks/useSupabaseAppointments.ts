@@ -189,7 +189,7 @@ export const useSupabaseAppointments = () => {
     if (!isAdmin) return
 
     const channel = supabase
-      .channel('appointments_changes')
+      .channel('appointments_changes_' + Math.random().toString(36).substring(2, 9))
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'appointments' },

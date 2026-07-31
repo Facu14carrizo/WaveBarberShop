@@ -90,7 +90,7 @@ export function useDayAvailability() {
   // Suscribirse a cambios en tiempo real
   useEffect(() => {
     const channel = supabase
-      .channel('day_availability_changes')
+      .channel('day_availability_changes_' + Math.random().toString(36).substring(2, 9))
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
