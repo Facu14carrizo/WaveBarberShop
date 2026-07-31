@@ -125,8 +125,8 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         appointmentId: appointment.id,
         customerName: appointment.customerName,
         customerPhone: appointment.customerPhone || undefined,
-        amount: appointment.service.price,
-        notes: `Corte: ${appointment.service.name}. Anotado desde la lista de turnos pasados.`,
+        amount: appointment.service?.price || 0,
+        notes: `Corte: ${appointment.service?.name || 'Desconocido'}. Anotado desde la lista de turnos pasados.`,
         date: appointment.date,
         isPaid: false
       });
@@ -134,7 +134,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
       addNotification({
         type: 'success',
         title: 'Deuda Anotada',
-        message: `Se registró la deuda de $${appointment.service.price.toLocaleString()} para ${appointment.customerName} correctamente.`
+        message: `Se registró la deuda de $${(appointment.service?.price || 0).toLocaleString()} para ${appointment.customerName} correctamente.`
       });
     } catch (error) {
       console.error('Error registering debt:', error);
@@ -842,7 +842,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
               <span className="text-2xl">{appointment.service.icon}</span>
               <div>
                 <p className="font-semibold text-white">{appointment.service.name}</p>
-                <p className="text-sm text-gray-400">${appointment.service.price.toLocaleString()}</p>
+                <p className="text-sm text-gray-400">${(appointment.service?.price || 0).toLocaleString()}</p>
               </div>
             </div>
           </div>
@@ -1534,7 +1534,7 @@ const DebtsSection: React.FC<{
                 <option value="">-- Selecciona un turno reciente --</option>
                 {recentAppointments.map(apt => (
                   <option key={apt.id} value={apt.id}>
-                    {apt.customerName} - {apt.service.name} (${apt.service.price.toLocaleString()}) [{apt.date} {apt.time}]
+                    {apt.customerName} - {apt.service?.name || 'Servicio'} (${(apt.service?.price || 0).toLocaleString()}) [{apt.date} {apt.time}]
                   </option>
                 ))}
               </select>
@@ -2684,7 +2684,7 @@ const TrashSection: React.FC<TrashSectionProps> = ({
                     <span className="text-2xl">{appointment.service.icon}</span>
                     <div>
                       <p className="font-semibold text-white">{appointment.service.name}</p>
-                      <p className="text-sm text-gray-400">${appointment.service.price.toLocaleString()}</p>
+                      <p className="text-sm text-gray-400">${(appointment.service?.price || 0).toLocaleString()}</p>
                     </div>
                   </div>
 

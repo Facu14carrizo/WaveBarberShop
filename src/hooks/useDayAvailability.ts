@@ -14,6 +14,7 @@ const readLocal = (): DayAvailability => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return { friday: true, saturday: true }; // Por defecto ambos activos
     const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return { friday: true, saturday: true };
     return {
       friday: parsed.friday !== false, // true por defecto
       saturday: parsed.saturday !== false // true por defecto

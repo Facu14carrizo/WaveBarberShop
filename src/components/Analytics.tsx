@@ -26,7 +26,7 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
 
     const totalAppointments = appointments.filter(a => a.customerName !== 'CERRADO').length;
     const totalCuts = done.length;
-    const totalRevenue = done.reduce((sum, a) => sum + a.service.price, 0);
+    const totalRevenue = done.reduce((sum, a) => sum + (a.service?.price || 0), 0);
     // Crecimiento mensual (ingresos mes actual vs mes anterior)
     const now = new Date();
     const thisMonthIdx = now.getMonth();    // Agrupar por mes
@@ -47,20 +47,20 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       // Agrupar por mes
       const mPrev = monthlyMap.get(monthKey);
       if (mPrev) {
-        mPrev.total += a.service.price;
+        mPrev.total += a.service?.price || 0;
         mPrev.count += 1;
       } else {
-        monthlyMap.set(monthKey, { idx: monthIdx, total: a.service.price, count: 1, year: year });
+        monthlyMap.set(monthKey, { idx: monthIdx, total: a.service?.price || 0, count: 1, year: year });
       }
       
       // Agrupar por día
       const dayLabel = `${weekday} ${day}/${monthIdx + 1}/${year}`;
       const dPrev = dailyMap.get(dayLabel);
       if (dPrev) {
-        dPrev.total += a.service.price;
+        dPrev.total += a.service?.price || 0;
         dPrev.count += 1;
       } else {
-        dailyMap.set(dayLabel, { monthIdx, day, total: a.service.price, count: 1, year });
+        dailyMap.set(dayLabel, { monthIdx, day, total: a.service?.price || 0, count: 1, year });
       }
     }
 
@@ -103,13 +103,13 @@ export const Analytics: React.FC<AnalyticsProps> = ({ appointments }) => {
       
       const existing = weekendMap.get(weekendKey);
       if (existing) {
-        existing.total += a.service.price;
+        existing.total += a.service?.price || 0;
         existing.count += 1;
         if (dt.getTime() > existing.end.getTime()) existing.end = new Date(dt);
         if (dt.getTime() < existing.start.getTime()) existing.start = new Date(dt);
       } else {
         weekendMap.set(weekendKey, { 
-          total: a.service.price, 
+          total: a.service?.price || 0, 
           count: 1,
           start: new Date(dt), 
           end: new Date(dt) 

@@ -10,6 +10,7 @@ const readLocal = (): CustomTimeRanges => {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return { friday: [], saturday: [] }
     const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { friday: [], saturday: [] }
     return {
       friday: Array.isArray(parsed.friday) ? parsed.friday : [],
       saturday: Array.isArray(parsed.saturday) ? parsed.saturday : []
