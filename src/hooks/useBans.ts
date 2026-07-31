@@ -327,18 +327,20 @@ export const useBans = () => {
 
   // Verificar si una IP está baneada
   const isIPBanned = (ip: string): boolean => {
-    if (!ip || ip.trim() === '') return false;
+    if (!ip || typeof ip !== 'string' || ip.trim() === '') return false;
     const ipTrimmed = ip.trim();
     
     // Verificar en el estado
-    const inState = bannedIPs.some(banned => banned.ip_address === ipTrimmed);
+    const inState = bannedIPs.some(banned => banned && banned.ip_address === ipTrimmed);
     if (inState) return true;
     
     // Verificar también en localStorage como fallback
     try {
       const localBans = JSON.parse(localStorage.getItem('banned_ips') || '[]');
-      const inLocal = localBans.some((b: any) => b.ip_address === ipTrimmed);
-      return inLocal;
+      if (Array.isArray(localBans)) {
+        return localBans.some((b: any) => b && b.ip_address === ipTrimmed);
+      }
+      return false;
     } catch {
       return false;
     }
@@ -346,9 +348,11 @@ export const useBans = () => {
 
   // Verificar si un teléfono está baneado
   const isPhoneBanned = (phone: string): boolean => {
+    if (!phone || typeof phone !== 'string') return false;
     // Normalizar teléfono (remover espacios, guiones, etc.)
     const normalized = phone.replace(/\s|-|\(|\)/g, '');
     return bannedPhones.some(banned => {
+      if (!banned || !banned.phone || typeof banned.phone !== 'string') return false;
       const bannedNormalized = banned.phone.replace(/\s|-|\(|\)/g, '');
       return bannedNormalized === normalized;
     });
@@ -356,7 +360,11 @@ export const useBans = () => {
 
   // Verificar si un email está baneado
   const isEmailBanned = (email: string): boolean => {
-    return bannedEmails.some(banned => banned.email.toLowerCase() === email.toLowerCase());
+    if (!email || typeof email !== 'string') return false;
+    return bannedEmails.some(banned => {
+      if (!banned || !banned.email || typeof banned.email !== 'string') return false;
+      return banned.email.toLowerCase() === email.toLowerCase();
+    });
   };
 
   // Banear una IP
