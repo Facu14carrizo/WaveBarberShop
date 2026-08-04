@@ -107,6 +107,27 @@ function updateStatus(newStatus) {
   console.log(`[WaveBro Status] ${newStatus}`);
 }
 
+// Helper to find valid local Chrome/Edge executable
+function getChromeExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  const possiblePaths = [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google\\Chrome\\Application\\chrome.exe') : '',
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+  ].filter(Boolean);
+
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return undefined;
+}
+
 // WhatsApp Client Init
 let client;
 
@@ -148,18 +169,19 @@ function initWhatsApp() {
     '--use-mock-keychain'
   ];
 
+  const execPath = isWin ? getChromeExecutablePath() : (process.env.PUPPETEER_EXECUTABLE_PATH || undefined);
+
   client = new Client({
     authStrategy: new LocalAuth({
       dataPath: path.join(__dirname, '.wwebjs_auth')
     }),
+    webVersionCache: {
+      type: 'remote',
+      remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018905047-alpha.html',
+    },
     puppeteer: {
       headless: true,
-      // Usa Chrome local en Windows, y la ruta por defecto o del entorno en Linux (producción)
-      ...(isWin ? {
-        executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-      } : process.env.PUPPETEER_EXECUTABLE_PATH ? {
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH
-      } : {}),
+      ...(execPath ? { executablePath: execPath } : {}),
       args: chromeArgs
     }
   });
@@ -438,6 +460,23 @@ function formatPhoneNumberToJID(phone) {
   return `${cleaned}@c.us`;
 }
 
+function formatDateForWhatsApp(date) {
+  if (!date) return '';
+  let dateFormatted = date;
+  if (date && date.includes('-')) {
+    try {
+      const [year, month, day] = date.split('-').map(Number);
+      const parsedDate = new Date(year, month - 1, day);
+      const options = { weekday: 'long', day: 'numeric', month: 'long' };
+      dateFormatted = parsedDate.toLocaleDateString('es-ES', options).replace(',', '');
+    } catch (e) {
+      console.error('Error formatting date:', e);
+    }
+  }
+  // Convert day of the week to UPPERCASE (e.g. VIERNES, SÁBADO)
+  return dateFormatted.replace(/\b(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b/gi, (m) => m.toUpperCase());
+}
+
 async function sendConfirmationMessage(appointment) {
   if (!client || botStatus !== 'CONNECTED') {
     console.warn('[WaveBro] No se puede enviar confirmación, el bot no está CONECTADO.');
@@ -458,23 +497,10 @@ async function sendConfirmationMessage(appointment) {
     ? `$${Number(appointment.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
     : '';
     
-  const date = appointment.date;
+  const dateFormatted = formatDateForWhatsApp(appointment.date);
   const time = appointment.time;
-  
-  // Format date to Spanish if it is a raw YYYY-MM-DD date string
-  let dateFormatted = date;
-  if (date && date.includes('-')) {
-    try {
-      const [year, month, day] = date.split('-').map(Number);
-      const parsedDate = new Date(year, month - 1, day);
-      const options = { weekday: 'long', day: 'numeric', month: 'long' };
-      dateFormatted = parsedDate.toLocaleDateString('es-ES', options).replace(',', '');
-    } catch (e) {
-      console.error('Error formatting date:', e);
-    }
-  }
 
-  const message = `Tu turno se agendó con exito💥\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${dateFormatted}\nHora: ${time} hs\n\n¡Te espero! 💈🔥`;
+  const message = `Que onda *${name}*!\n\n*Tu turno se agendó con éxito! 💥*\n\n💈 *${service} ${priceFormatted ? `(${priceFormatted})` : ''}*\n📅 *${dateFormatted}*\n⏰ *${time} hs*\n\n¡Te espero! 💈🔥`;
   
   try {
     await client.sendMessage(targetJid, message);
@@ -551,18 +577,20 @@ async function checkAndSendReminders() {
       const targetJid = formatPhoneNumberToJID(phone);
       if (!targetJid) continue;
       
+      const name = apt.customer_name || 'Cliente';
+      const service = apt.service_name || 'Servicio';
+      const priceFormatted = apt.service_price 
+        ? `$${Number(apt.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+        : '';
+      const dateFormatted = formatDateForWhatsApp(apt.date);
+
       // 1. Recordatorio 1 día antes a partir de las 9:00 AM
       const isTomorrow = tomorrow.getFullYear() === aptDate.getFullYear() &&
                          tomorrow.getMonth() === aptDate.getMonth() &&
                          tomorrow.getDate() === aptDate.getDate();
                          
       if (isTomorrow && now.getHours() >= 9 && !apt.reminder_sent_1day) {
-        const priceFormatted = apt.service_price 
-          ? `$${Number(apt.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
-          : '';
-        const service = apt.service_name || 'Servicio';
-        
-        const message = `¡Recordatorio de tu turno de mañana! 💈\n\nTe espero mañana en *Wave Barber Shop*:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nFecha: ${apt.date}\nHora: ${apt.time} hs\n\n¡Que tengas un gran día! 🔥`;
+        const message = `Hola *${name}*! 👋\n\n¡Recordatorio de tu turno de mañana! 💈\n\nTe espero en *Wave Barber Shop*:\n\n💈 *Servicio:* ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\n📅 *Fecha:* *${dateFormatted}*\n⏰ *Hora:* *${apt.time} hs*\n\n¡Que tengas un gran día! 🔥`;
         
         try {
           await client.sendMessage(targetJid, message);
@@ -573,20 +601,15 @@ async function checkAndSendReminders() {
             .update({ reminder_sent_1day: true })
             .eq('id', apt.id);
             
-          logActivity('system', 'System', `Recordatorio 1 día enviado a ${apt.customer_name} (${phone})`, message);
+          logActivity('system', 'System', `Recordatorio 1 día enviado a ${name} (${phone})`, message);
         } catch (err) {
           console.error(`[WaveBro Reminders] Error enviando recordatorio 1 día a ${targetJid}:`, err);
         }
       }
       
-      // 2. Recordatorio 2 horas antes (usamos el flag 'reminder_sent_1hour' para evitar migraciones de base de datos)
+      // 2. Recordatorio 2 horas antes
       if (diffHours > 0 && diffHours <= 2.0 && !apt.reminder_sent_1hour) {
-        const priceFormatted = apt.service_price 
-          ? `$${Number(apt.service_price).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
-          : '';
-        const service = apt.service_name || 'Servicio';
-        
-        const message = `¡Falta poco para tu turno! 💈\n\nRecordá que hoy tenés un turno en *Wave Barber Shop* en menos de 2 horas:\n\nServicio: ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\nHora: ${apt.time} hs\n\n¡Te espero! 🔥`;
+        const message = `Hola *${name}*! 👋\n\n¡Falta poco para tu turno! 💈\n\nRecordá que hoy tenés turno en *Wave Barber Shop* en menos de 2 horas:\n\n💈 *Servicio:* ${service} ${priceFormatted ? `(${priceFormatted})` : ''}\n⏰ *Hora:* *${apt.time} hs*\n\n¡Te espero! 🔥`;
         
         try {
           await client.sendMessage(targetJid, message);

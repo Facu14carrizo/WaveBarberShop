@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical, DollarSign, Plus, Smile, Bot } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Trash2, Edit, CheckCircle, XCircle, BarChart3, Filter, Search, Mail, MessageSquare, RotateCcw, Trash, RotateCw, Ban, Shield, Settings, RefreshCw, MoreVertical, DollarSign, Plus, Smile, Bot, ArrowLeftRight } from 'lucide-react';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useNotifications } from '../hooks/useNotifications';
 import { useDayAvailability } from '../hooks/useDayAvailability';
@@ -65,6 +65,9 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const [appointmentToBan, setAppointmentToBan] = useState<Appointment | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapSourceAppointment, setSwapSourceAppointment] = useState<Appointment | null>(null);
+  const [swapTargetAppointmentId, setSwapTargetAppointmentId] = useState<string>('');
 
   // Force scroll to top when component mounts
   React.useEffect(() => {
@@ -107,6 +110,55 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
   const handleCancelBan = () => {
     setBanModalOpen(false);
     setAppointmentToBan(null);
+  };
+
+  const handleStartSwap = (appointment: Appointment) => {
+    setSwapSourceAppointment(appointment);
+    setSwapTargetAppointmentId('');
+    setSwapModalOpen(true);
+  };
+
+  const handleConfirmSwap = async () => {
+    if (!swapSourceAppointment || !swapTargetAppointmentId) return;
+
+    const targetAppointment = appointments.find(a => a.id === swapTargetAppointmentId);
+    if (!targetAppointment) return;
+
+    const dateA = swapSourceAppointment.date;
+    const timeA = swapSourceAppointment.time;
+    const dateB = targetAppointment.date;
+    const timeB = targetAppointment.time;
+
+    try {
+      await onUpdateAppointment(swapSourceAppointment.id, {
+        date: dateB,
+        time: timeB,
+        updatedAt: new Date()
+      });
+
+      await onUpdateAppointment(targetAppointment.id, {
+        date: dateA,
+        time: timeA,
+        updatedAt: new Date()
+      });
+
+      addNotification({
+        type: 'success',
+        title: 'Turnos Intercambiados',
+        message: `Se intercambiaron los turnos de ${swapSourceAppointment.customerName} (${dateB} ${timeB}) y ${targetAppointment.customerName} (${dateA} ${timeA}).`
+      });
+    } catch (error) {
+      console.error('Error al intercambiar turnos:', error);
+      addNotification({
+        type: 'error',
+        title: 'Error al intercambiar',
+        message: 'No se pudieron intercambiar los turnos. Intente nuevamente.'
+      });
+    } finally {
+      setSwapModalOpen(false);
+      setSwapSourceAppointment(null);
+      setSwapTargetAppointmentId('');
+    }
   };
 
   const handleRegisterDebt = async (appointment: Appointment) => {
@@ -646,6 +698,18 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
                     <span>Anotar deuda</span>
                   </button>
                 )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setOpenMenuId(null);
+                    handleStartSwap(appointment);
+                  }}
+                  className="w-full flex items-center space-x-2 px-4 py-2.5 text-sm text-blue-400 hover:bg-blue-500/20 transition-colors duration-200 border-b border-gray-600/50"
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                  <span>Intercambiar turno</span>
+                </button>
                 <button
                   onClick={(e) => {
                     e.preventDefault();
@@ -1294,6 +1358,154 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
         onConfirm={handleConfirmBan}
         onCancel={handleCancelBan}
       />
+
+      {/* Modal de Intercambio de Turnos */}
+      {swapModalOpen && swapSourceAppointment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl max-w-md w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start mb-4">
+              <div className="flex items-center space-x-3 text-blue-400">
+                <div className="bg-blue-500/10 p-2.5 rounded-xl border border-blue-500/20">
+                  <ArrowLeftRight className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Intercambiar Turno</h3>
+                  <p className="text-xs text-gray-400">Cambiar fecha y hora entre 2 clientes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setSwapModalOpen(false);
+                  setSwapSourceAppointment(null);
+                }}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <XCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-left">
+              {/* Turno 1 (Origen) */}
+              <div className="bg-gray-900/60 border border-gray-700/60 p-3.5 rounded-xl">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block mb-1">Turno A (Seleccionado)</span>
+                <p className="font-semibold text-white text-sm">{swapSourceAppointment.customerName}</p>
+                <div className="flex items-center space-x-2 text-xs text-blue-300 mt-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span>{swapSourceAppointment.date} - {swapSourceAppointment.time} hs</span>
+                  <span className="text-gray-400">({swapSourceAppointment.service.name})</span>
+                </div>
+              </div>
+
+              <div className="flex justify-center">
+                <div className="bg-blue-500/20 p-2 rounded-full border border-blue-500/30 text-blue-400">
+                  <ArrowLeftRight className="h-5 w-5" />
+                </div>
+              </div>
+
+              {/* Turno 2 (Destino) */}
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-2">
+                  Seleccionar Turno B para intercambiar:
+                </label>
+                {(() => {
+                  const isSameWeek = (aptDate: Date | null, refDate: Date = currentTime) => {
+                    if (!aptDate) return false;
+                    const current = new Date(refDate);
+                    const day = current.getDay();
+                    const diffToMonday = (day === 0 ? -6 : 1 - day);
+                    const monday = new Date(current);
+                    monday.setDate(current.getDate() + diffToMonday);
+                    monday.setHours(0, 0, 0, 0);
+
+                    const sunday = new Date(monday);
+                    sunday.setDate(monday.getDate() + 6);
+                    sunday.setHours(23, 59, 59, 999);
+
+                    return aptDate >= monday && aptDate <= sunday;
+                  };
+
+                  const availableTargets = appointments
+                    .filter(apt => {
+                      if (
+                        apt.id === swapSourceAppointment.id || 
+                        apt.customerName === 'CERRADO' || 
+                        apt.status !== 'confirmed'
+                      ) {
+                        return false;
+                      }
+                      const d = parseAppointmentDateTime(apt.date, apt.time, apt.createdAt);
+                      return isSameWeek(d, currentTime);
+                    })
+                    .sort((a, b) => {
+                      const da = parseAppointmentDateTime(a.date, a.time, a.createdAt);
+                      const db = parseAppointmentDateTime(b.date, b.time, b.createdAt);
+                      if (!da || !db) return 0;
+                      return da.getTime() - db.getTime();
+                    });
+
+                  if (availableTargets.length === 0) {
+                    return (
+                      <div className="text-sm text-yellow-400 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                        No hay otros turnos confirmados disponibles en esta semana para intercambiar.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <select
+                      value={swapTargetAppointmentId}
+                      onChange={(e) => setSwapTargetAppointmentId(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-gray-700 border border-gray-600 text-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- Selecciona un cliente / turno --</option>
+                      {availableTargets.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {target.customerName} | {target.date} - {target.time} hs ({target.service.name})
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()}
+              </div>
+
+              {/* Previsualización del intercambio */}
+              {swapTargetAppointmentId && (() => {
+                const target = appointments.find(t => t.id === swapTargetAppointmentId);
+                if (!target) return null;
+                return (
+                  <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl space-y-1.5 text-xs text-gray-300">
+                    <p className="font-bold text-blue-300">Resumen del cambio:</p>
+                    <p>• <strong>{swapSourceAppointment.customerName}</strong> pasa a: <span className="text-white font-medium">{target.date} - {target.time} hs</span></p>
+                    <p>• <strong>{target.customerName}</strong> pasa a: <span className="text-white font-medium">{swapSourceAppointment.date} - {swapSourceAppointment.time} hs</span></p>
+                  </div>
+                );
+              })()}
+
+              {/* Botones */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSwapModalOpen(false);
+                    setSwapSourceAppointment(null);
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-gray-400 hover:text-white bg-gray-700/50 hover:bg-gray-700 border border-gray-600/30 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSwap}
+                  disabled={!swapTargetAppointmentId}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed border border-blue-500 rounded-xl shadow-lg shadow-blue-950/40 transition-all"
+                >
+                  Confirmar Intercambio
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
