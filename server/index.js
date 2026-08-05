@@ -128,10 +128,27 @@ function getChromeExecutablePath() {
   return undefined;
 }
 
+function cleanStaleLockFiles() {
+  const sessionDir = path.join(__dirname, '.wwebjs_auth', 'session');
+  const lockFiles = ['DevToolsActivePort', 'lockfile', 'SingletonLock', 'SingletonCookie', 'SingletonSocket'];
+  lockFiles.forEach(file => {
+    const filePath = path.join(sessionDir, file);
+    if (fs.existsSync(filePath)) {
+      try {
+        fs.unlinkSync(filePath);
+        console.log(`[WaveBro] Archivo de bloqueo residual eliminado: ${file}`);
+      } catch (err) {
+        console.warn(`[WaveBro] No se pudo eliminar ${file}:`, err.message);
+      }
+    }
+  });
+}
+
 // WhatsApp Client Init
 let client;
 
 function initWhatsApp() {
+  cleanStaleLockFiles();
   updateStatus('CONNECTING');
   
   const isWin = process.platform === 'win32';
@@ -352,6 +369,31 @@ function initWhatsApp() {
     updateStatus('DISCONNECTED');
   });
 }
+
+// Graceful Shutdown
+async function gracefulShutdown(signal) {
+  console.log(`[WaveBro] Cerrando WhatsApp client por señal: ${signal}...`);
+  if (client) {
+    try {
+      await client.destroy();
+    } catch (e) {}
+  }
+}
+
+process.once('SIGUSR2', async () => {
+  await gracefulShutdown('SIGUSR2');
+  process.kill(process.pid, 'SIGUSR2');
+});
+
+process.on('SIGINT', async () => {
+  await gracefulShutdown('SIGINT');
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await gracefulShutdown('SIGTERM');
+  process.exit(0);
+});
 
 // REST API Endpoints
 app.get('/api/status', (req, res) => {
