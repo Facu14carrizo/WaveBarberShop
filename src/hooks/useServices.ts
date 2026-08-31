@@ -8,7 +8,7 @@ const defaultServices: Service[] = [
     id: 'classic-cut',
     name: 'Corte Clásico',
     duration: 30,
-    price: 14000,
+    price: 15000,
     description: 'Corte con tijera y maquina tradicional, fade, etc.\n(incluye perfilado de barba y cejas).',
     icon: '✂️'
   },
@@ -24,7 +24,7 @@ const defaultServices: Service[] = [
     id: 'designs',
     name: 'Corte + Diseño',
     duration: 40,
-    price: 15000,
+    price: 16000,
     description: 'Diseño, líneas artísticas en el cabello: figuras, logos y detalles personalizados.',
     icon: '🎨',
     isActive: true
