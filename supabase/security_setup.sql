@@ -195,6 +195,28 @@ BEGIN
     RAISE EXCEPTION 'Este teléfono ha sido bloqueado. No podés crear turnos.';
   END IF;
 
+  -- Validar si el horario ya está ocupado o cerrado
+  IF EXISTS (
+    SELECT 1 FROM appointments
+    WHERE date = sanitize_booking_text(p_date, 20)
+      AND time = sanitize_booking_text(p_time, 10)
+      AND status IN ('confirmed', 'pending')
+      AND (deleted_at IS NULL)
+  ) THEN
+    RAISE EXCEPTION 'El horario seleccionado ya no está disponible o se encuentra cerrado.';
+  END IF;
+
+  -- Validar disponibilidad del día de la semana (day_availability)
+  IF lower(p_date) LIKE '%viernes%' THEN
+    IF EXISTS (SELECT 1 FROM day_availability WHERE friday = false ORDER BY created_at DESC LIMIT 1) THEN
+      RAISE EXCEPTION 'Los viernes se encuentran cerrados para reservas.';
+    END IF;
+  ELSIF lower(p_date) LIKE '%sábado%' OR lower(p_date) LIKE '%sabado%' THEN
+    IF EXISTS (SELECT 1 FROM day_availability WHERE saturday = false ORDER BY created_at DESC LIMIT 1) THEN
+      RAISE EXCEPTION 'Los sábados se encuentran cerrados para reservas.';
+    END IF;
+  END IF;
+
   v_companions := '::ACOMP::' || coalesce(p_additional_names::text, '[]');
   v_notes := CASE
     WHEN p_additional_names IS NOT NULL AND jsonb_array_length(p_additional_names) > 0

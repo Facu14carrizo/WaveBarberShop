@@ -82,11 +82,13 @@ const resetAllRanges = async (): Promise<void> => {
         
         if (deleteError) {
           console.error(`Error deleting range ${range.id}:`, deleteError)
+          // No marcar como realizado si falló por permisos (ej: usuario cliente sin login)
+          return
         }
       }
     }
     
-    // Limpiar localStorage también
+    // Limpiar localStorage sólo si la eliminación en Supabase fue exitosa (o no había rangos)
     writeLocal({ friday: [], saturday: [] })
     markResetDone()
     

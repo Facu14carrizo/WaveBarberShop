@@ -40,20 +40,22 @@ export function useDayAvailability() {
   const loadAvailability = async () => {
     try {
       setLoading(true);
-      // Intentar cargar desde Supabase
-      const { data, error: supabaseError } = await supabase
+      // Intentar cargar desde Supabase ordenado por fecha de creación desc
+      const { data: rows, error: supabaseError } = await supabase
         .from('day_availability')
         .select('*')
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1);
 
-      if (supabaseError && supabaseError.code !== 'PGRST116') { // PGRST116 = no rows returned
+      if (supabaseError) {
         throw supabaseError;
       }
 
-      if (data) {
+      if (rows && rows.length > 0) {
+        const latest = rows[0];
         const loaded: DayAvailability = {
-          friday: data.friday !== false,
-          saturday: data.saturday !== false
+          friday: latest.friday !== false,
+          saturday: latest.saturday !== false
         };
         setAvailability(loaded);
         writeLocal(loaded);
@@ -113,45 +115,39 @@ export function useDayAvailability() {
     writeLocal(newAvailability);
 
     try {
-      // Intentar actualizar en Supabase
-      const { data: existingData } = await supabase
+      // Obtener todos los registros existentes para actualizar el último y eliminar duplicados
+      const { data: rows, error: fetchError } = await supabase
         .from('day_availability')
         .select('*')
-        .single();
+        .order('created_at', { ascending: false });
 
-      if (existingData) {
-        // Actualizar registro existente
-        const { error } = await supabase
+      if (fetchError) throw fetchError;
+
+      if (rows && rows.length > 0) {
+        const latestId = rows[0].id;
+        // Actualizar registro principal
+        const { error: updateError } = await supabase
           .from('day_availability')
           .update({ [day]: enabled, updated_at: new Date().toISOString() })
-          .eq('id', existingData.id);
+          .eq('id', latestId);
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+
+        // Si existen filas duplicadas acumuladas, eliminarlas para mantener la BD limpia
+        if (rows.length > 1) {
+          const duplicateIds = rows.slice(1).map(r => r.id);
+          await supabase
+            .from('day_availability')
+            .delete()
+            .in('id', duplicateIds);
+        }
       } else {
         // Crear nuevo registro (primera vez)
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from('day_availability')
           .insert([{ friday: newAvailability.friday, saturday: newAvailability.saturday }]);
 
-        if (error) {
-          // Si falla (por ejemplo, si ya existe un registro), intentar actualizar el primero
-          const { data: allData } = await supabase
-            .from('day_availability')
-            .select('*')
-            .limit(1)
-            .single();
-          
-          if (allData) {
-            const { error: updateError } = await supabase
-              .from('day_availability')
-              .update({ [day]: enabled, updated_at: new Date().toISOString() })
-              .eq('id', allData.id);
-            
-            if (updateError) throw updateError;
-          } else {
-            throw error;
-          }
-        }
+        if (insertError) throw insertError;
       }
       setError(null);
     } catch (err) {
