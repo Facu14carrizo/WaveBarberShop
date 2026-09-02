@@ -198,7 +198,7 @@ BEGIN
   -- Validar si el horario ya está ocupado o cerrado
   IF EXISTS (
     SELECT 1 FROM appointments
-    WHERE date = sanitize_booking_text(p_date, 20)
+    WHERE date = sanitize_booking_text(p_date, 50)
       AND time = sanitize_booking_text(p_time, 10)
       AND status IN ('confirmed', 'pending')
       AND (deleted_at IS NULL)
@@ -235,7 +235,7 @@ BEGIN
     sanitize_booking_text(p_service_name, 100),
     p_service_price, p_service_duration,
     sanitize_booking_text(coalesce(p_service_icon, ''), 20),
-    sanitize_booking_text(p_date, 20),
+    sanitize_booking_text(p_date, 50),
     sanitize_booking_text(p_time, 10),
     'confirmed',
     nullif(trim(v_notes), ''),

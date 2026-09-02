@@ -4,7 +4,7 @@ import { TimeSlotGrid } from './TimeSlotGrid';
 import { ServiceSelector } from './ServiceSelector';
 import { BookingForm } from './BookingForm';
 import { BackButton } from './BackButton';
-import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges, parseAppointmentDateTime } from '../utils/timeSlots';
+import { getAvailableDays, getNextFriday, getNextSaturday, formatDate, isSlotAvailable, CustomTimeRanges, parseAppointmentDateTime, isSameAppointmentDate } from '../utils/timeSlots';
 import { useSupabaseCustomTimeRanges } from '../hooks/useSupabaseCustomTimeRanges';
 import { useDayAvailability } from '../hooks/useDayAvailability';
 import { Appointment, Service } from '../types';
@@ -56,7 +56,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({
   const availableSlots = currentDay.slots.map(slot => {
     let available = false;
     const isClosed = appointments.some(
-      apt => apt.date === selectedDate && apt.time === slot.time && apt.customerName === 'CERRADO' && apt.status === 'confirmed'
+      apt => isSameAppointmentDate(apt.date, selectedDate, apt.createdAt) && apt.time === slot.time && apt.customerName === 'CERRADO' && apt.status === 'confirmed'
     );
 
     if (!isClosed && selectedService) {

@@ -171,13 +171,31 @@ export const parseAppointmentDateTime = (dateLabel: string, time: string, create
   const m = dateLabel.match(/\b(\d{1,2})\s+de\s+([a-záéíóúñ]+)/i);
   if (!m) return null;
   const day = parseInt(m[1], 10);
-  const monthName = m[2].toLowerCase();
-  const monthMap: Record<string, number> = {
-    'enero': 0, 'febrero': 1, 'marzo': 2, 'abril': 3, 'mayo': 4, 'junio': 5,
-    'julio': 6, 'agosto': 7, 'septiembre': 8, 'setiembre': 8,
-    'octubre': 9, 'noviembre': 10, 'diciembre': 11
-  };
-  const month = monthMap[monthName];
+  const rawMonth = m[2].toLowerCase();
+  
+  const monthEntries: [string, number][] = [
+    ['enero', 0], ['ene', 0],
+    ['febrero', 1], ['feb', 1],
+    ['marzo', 2], ['mar', 2],
+    ['abril', 3], ['abr', 3],
+    ['mayo', 4], ['may', 4],
+    ['junio', 5], ['jun', 5],
+    ['julio', 6], ['jul', 6],
+    ['agosto', 7], ['ago', 7],
+    ['septiembre', 8], ['setiembre', 8], ['septiemb', 8], ['septiem', 8], ['sept', 8], ['sep', 8],
+    ['octubre', 9], ['oct', 9],
+    ['noviembre', 10], ['noviemb', 10], ['noviem', 10], ['nov', 10],
+    ['diciembre', 11], ['diciemb', 11], ['diciem', 11], ['dic', 11]
+  ];
+
+  let month: number | null = null;
+  for (const [key, val] of monthEntries) {
+    if (rawMonth.startsWith(key) || key.startsWith(rawMonth)) {
+      month = val;
+      break;
+    }
+  }
+
   if (month == null) return null;
   const [hour, minute] = time.split(':').map(Number);
   
@@ -194,28 +212,38 @@ export const parseAppointmentDateTime = (dateLabel: string, time: string, create
   return new Date(year, dateMonth, day, hour || 0, minute || 0, 0, 0);
 };
 
+export const isSameAppointmentDate = (dateStr1: string, dateStr2: string, createdAt?: Date): boolean => {
+  if (dateStr1 === dateStr2) return true;
+  const n1 = dateStr1.trim().toLowerCase();
+  const n2 = dateStr2.trim().toLowerCase();
+  if (n1 === n2) return true;
+  if (n1.startsWith(n2) || n2.startsWith(n1)) return true;
+
+  const d1 = parseAppointmentDateTime(dateStr1, '12:00', createdAt || new Date());
+  const d2 = parseAppointmentDateTime(dateStr2, '12:00', new Date());
+  if (d1 && d2) {
+    return d1.getFullYear() === d2.getFullYear() &&
+           d1.getMonth() === d2.getMonth() &&
+           d1.getDate() === d2.getDate();
+  }
+  return false;
+};
+
 export const isSlotAvailable = (dateLabel: string, time: string, appointments: Appointment[]): boolean => {
-  // Para comparar correctamente, necesitamos saber para qué año estamos consultando
-  // En la vista de cliente, 'dateLabel' es para el próximo viernes/sábado (año actual o próximo)
-  // Pero aquí no tenemos el 'Date' objeto de la consulta fácilmente sin cambiar la firma.
-  // Sin embargo, podemos usar la lógica de que un turno de hace un año NO debería bloquear un turno de hoy.
-  
   const now = new Date();
   
   return !appointments.some(
     appointment => {
-      if (appointment.date !== dateLabel || appointment.time !== time || appointment.status !== 'confirmed') {
+      if (appointment.time !== time || appointment.status !== 'confirmed') {
+        return false;
+      }
+
+      if (!isSameAppointmentDate(appointment.date, dateLabel, appointment.createdAt)) {
         return false;
       }
       
-      // Si el label coincide, verificar el año usando createdAt
       const aptDate = parseAppointmentDateTime(appointment.date, appointment.time, appointment.createdAt);
       if (!aptDate) return false;
-      
-      // Solo nos importan los turnos que están cerca de "ahora" (mismo año/mes aprox)
-      // O más simple: si el turno es del pasado (más de 1 mes atrás), no bloquea slots futuros.
-      // Pero espera, isSlotAvailable se usa para ver si alguien PUEDE reservar.
-      // Así que solo comparamos contra turnos que NO son pasados.
       
       return aptDate.getTime() > (now.getTime() - 24 * 60 * 60 * 1000); // Permitir turnos de hoy
     }
