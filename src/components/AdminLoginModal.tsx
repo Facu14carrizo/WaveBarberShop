@@ -68,7 +68,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 required
                 maxLength={120}
                 className="w-full pl-10 pr-3 py-3 bg-gray-800 border border-gray-600 text-white rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                placeholder="admin@ejemplo.com"
+                placeholder="Cuenta"
               />
             </div>
           </div>

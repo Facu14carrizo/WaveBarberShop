@@ -10,6 +10,7 @@ export interface Debt {
   notes?: string;
   date: string;
   isPaid: boolean;
+  paymentMethod?: 'efectivo' | 'mp';
   paidAt?: string;
   createdAt: string;
 }
@@ -44,6 +45,7 @@ const mapRowToDebt = (row: any): Debt => ({
   notes: row.notes || undefined,
   date: row.date,
   isPaid: Boolean(row.is_paid),
+  paymentMethod: row.payment_method || undefined,
   paidAt: row.paid_at || undefined,
   createdAt: row.created_at || new Date().toISOString()
 });
@@ -154,18 +156,18 @@ export function useDebts() {
     return true;
   };
 
-  const markAsPaid = async (id: string) => {
+  const markAsPaid = async (id: string, paymentMethod?: 'efectivo' | 'mp') => {
     const paidAt = new Date().toISOString();
     
     // Actualizar local
-    const updatedLocal = readLocalDebts().map(d => d.id === id ? { ...d, isPaid: true, paidAt } : d);
+    const updatedLocal = readLocalDebts().map(d => d.id === id ? { ...d, isPaid: true, paymentMethod, paidAt } : d);
     setDebts(updatedLocal);
     writeLocalDebts(updatedLocal);
 
     try {
       await supabase
         .from('debts')
-        .update({ is_paid: true, paid_at: paidAt })
+        .update({ is_paid: true, payment_method: paymentMethod || null, paid_at: paidAt })
         .eq('id', id);
     } catch (err) {
       console.warn('[useDebts] Error actualizando en Supabase:', err);

@@ -21,7 +21,8 @@ ALTER TABLE admin_allowlist FORCE ROW LEVEL SECURITY;
 INSERT INTO admin_allowlist (email)
 VALUES 
   ('Diazulises890@gmail.com'),
-  ('admin@admin.com')
+  ('admin@admin.com'),
+  ('admin@admin.com.ar')
 ON CONFLICT (email) DO NOTHING;
 
 -- ¿Es admin el usuario autenticado?

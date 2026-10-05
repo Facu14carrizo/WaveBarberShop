@@ -80,9 +80,10 @@ function App() {
         setAdminAllowed(false);
       } else {
         setAdminAllowed(true);
+        void refreshAppointments();
       }
     });
-  }, [isAdmin, signOut]);
+  }, [isAdmin, signOut, refreshAppointments]);
 
   // Check for upcoming appointment validity when appointments load
   useEffect(() => {
@@ -164,6 +165,7 @@ function App() {
     setNavigationStack(prev => [...prev, 'owner']);
     setView('owner');
     setShowLoginModal(false);
+    void refreshAppointments();
     // Force immediate scroll to top
     window.scrollTo(0, 0);
     // Also try with smooth behavior as backup

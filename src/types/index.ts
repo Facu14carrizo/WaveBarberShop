@@ -12,6 +12,7 @@ export interface Appointment {
   ipAddress?: string; // IP del usuario que creó el turno
   createdAt: Date;
   updatedAt: Date;
+  paymentMethod?: 'efectivo' | 'mp';
   reminderSent?: boolean;
 }
 

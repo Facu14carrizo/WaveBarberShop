@@ -5,24 +5,37 @@ import { getUserIP } from './useBans'
 import { useAdminAuth } from '../contexts/AdminAuthContext'
 import { normalizePhoneDigits } from '../utils/validation'
 
-// Marcador para acompañantes dentro de notes
+// Marcador para acompañantes y metadata dentro de notes
 const COMPANIONS_MARK = '::ACOMP::'
+const PAYMENT_MARK = '::PAYMENT::'
 
-const parseNotes = (notes?: string): { companions: string[]; cleanNotes?: string } => {
-  if (!notes) return { companions: [], cleanNotes: undefined }
-  const lines = notes.split(/\r?\n/)
-  const first = lines[0] || ''
-  if (first.startsWith(COMPANIONS_MARK)) {
-    const json = first.slice(COMPANIONS_MARK.length)
+const parseNotes = (notes?: string): { companions: string[]; paymentMethod?: 'efectivo' | 'mp'; cleanNotes?: string } => {
+  if (!notes) return { companions: [], paymentMethod: undefined, cleanNotes: undefined }
+  let remainingLines = notes.split(/\r?\n/)
+  let companions: string[] = []
+  let paymentMethod: 'efectivo' | 'mp' | undefined = undefined
+
+  if (remainingLines[0] && remainingLines[0].startsWith(COMPANIONS_MARK)) {
+    const json = remainingLines[0].slice(COMPANIONS_MARK.length)
     try {
-      const companions = JSON.parse(json)
-      const cleanNotes = lines.slice(1).join('\n') || undefined
-      return { companions: Array.isArray(companions) ? companions : [], cleanNotes }
+      const parsedComp = JSON.parse(json)
+      companions = Array.isArray(parsedComp) ? parsedComp : []
     } catch {
-      return { companions: [], cleanNotes: notes }
+      companions = []
     }
+    remainingLines = remainingLines.slice(1)
   }
-  return { companions: [], cleanNotes: notes }
+
+  if (remainingLines[0] && remainingLines[0].startsWith(PAYMENT_MARK)) {
+    const val = remainingLines[0].slice(PAYMENT_MARK.length).trim()
+    if (val === 'efectivo' || val === 'mp') {
+      paymentMethod = val
+    }
+    remainingLines = remainingLines.slice(1)
+  }
+
+  const cleanNotes = remainingLines.join('\n').trim() || undefined
+  return { companions, paymentMethod, cleanNotes }
 }
 
 const slotRowToAppointment = (row: PublicAppointmentSlotRow): Appointment => ({
@@ -70,6 +83,7 @@ const convertToAppointment = (row: AppointmentRow): Appointment => {
     status: row.status,
     notes: parsed.cleanNotes,
     additionalCustomerNames: parsed.companions,
+    paymentMethod: parsed.paymentMethod,
     ipAddress: ipAddress,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at)
@@ -80,10 +94,13 @@ const convertToAppointment = (row: AppointmentRow): Appointment => {
 const convertToRow = (
   appointment: Omit<Appointment, 'createdAt' | 'updatedAt'>
 ): Omit<AppointmentRow, 'created_at' | 'updated_at'> => {
-  const companions = appointment.additionalCustomerNames && appointment.additionalCustomerNames.length > 0
+  const companionsHeader = appointment.additionalCustomerNames && appointment.additionalCustomerNames.length > 0
     ? `${COMPANIONS_MARK}${JSON.stringify(appointment.additionalCustomerNames)}\n`
     : ''
-  const combinedNotes = `${companions}${appointment.notes || ''}`.trim()
+  const paymentHeader = appointment.paymentMethod
+    ? `${PAYMENT_MARK}${appointment.paymentMethod}\n`
+    : ''
+  const combinedNotes = `${companionsHeader}${paymentHeader}${appointment.notes || ''}`.trim()
   
   // Asegurar que ip_address sea string, null o undefined (Supabase acepta null)
   const ipAddress = appointment.ipAddress || null;

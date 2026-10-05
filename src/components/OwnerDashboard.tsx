@@ -377,6 +377,13 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
     onUpdateAppointment(id, { status, updatedAt: new Date() });
   };
 
+  const handlePaymentMethodToggle = (id: string, method: 'efectivo' | 'mp') => {
+    const old = appointments.find(a => a.id === id);
+    const newMethod = old?.paymentMethod === method ? undefined : method;
+    if (old) setLastAction({ type: 'update', snapshot: old });
+    onUpdateAppointment(id, { paymentMethod: newMethod, updatedAt: new Date() });
+  };
+
   const handleDelete = (appointment: Appointment) => {
     setLastAction({ type: 'delete', snapshot: appointment });
     onDeleteAppointment(appointment.id);
@@ -997,10 +1004,55 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({
             </div>
           </div>
           
-          <div className="pt-2 flex items-center justify-between">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isPast ? 'bg-gray-600/30 text-gray-300 border border-gray-600' : themeChipClass}`}>
-              {isPast ? 'Pasado' : (isToday ? 'Hoy' : 'Próximo')}
-            </span>
+          <div className="pt-2 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${isPast ? 'bg-gray-600/30 text-gray-300 border border-gray-600' : themeChipClass}`}>
+                {isPast ? 'Pasado' : (isToday ? 'Hoy' : 'Próximo')}
+              </span>
+              {isPast && (
+                <div className="relative inline-flex items-center p-0.5 bg-gray-950/80 border border-gray-700/60 rounded-full text-xs shadow-inner">
+                  <div
+                    className={`absolute inset-y-0.5 w-[calc(50%-2px)] rounded-full transition-all duration-300 ease-out ${
+                      appointment.paymentMethod === 'efectivo'
+                        ? 'left-0.5 bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-md shadow-emerald-950/50'
+                        : appointment.paymentMethod === 'mp'
+                        ? 'left-[calc(50%+1px)] bg-gradient-to-r from-sky-600 to-cyan-500 shadow-md shadow-sky-950/50'
+                        : 'hidden'
+                    }`}
+                  />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePaymentMethodToggle(appointment.id, 'efectivo');
+                    }}
+                    className={`relative z-10 px-2.5 py-0.5 rounded-full font-bold text-[11px] transition-colors duration-200 ${
+                      appointment.paymentMethod === 'efectivo'
+                        ? 'text-white'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                    title="Marcar pago en Efectivo"
+                  >
+                    Efect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePaymentMethodToggle(appointment.id, 'mp');
+                    }}
+                    className={`relative z-10 px-2.5 py-0.5 rounded-full font-bold text-[11px] transition-colors duration-200 ${
+                      appointment.paymentMethod === 'mp'
+                        ? 'text-white'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                    title="Marcar pago con Mercado Pago"
+                  >
+                    MP
+                  </button>
+                </div>
+              )}
+            </div>
             <span className="text-xs text-gray-500">
               {new Date(appointment.createdAt).toLocaleDateString()}
             </span>
@@ -1577,12 +1629,17 @@ const DebtsSection: React.FC<{
     });
   };
 
-  const handleMarkAsPaid = async (id: string) => {
-    await markAsPaid(id);
+  const [payingDebt, setPayingDebt] = useState<Debt | null>(null);
+
+  const handleConfirmPayDebt = async (method: 'efectivo' | 'mp') => {
+    if (!payingDebt) return;
+    const debtId = payingDebt.id;
+    setPayingDebt(null);
+    await markAsPaid(debtId, method);
     addNotification({
       type: 'success',
       title: 'Pago Registrado',
-      message: 'La cuenta ha sido marcada como PAGADA con éxito.'
+      message: `La cuenta fue marcada como PAGADA con ${method === 'efectivo' ? 'Efectivo' : 'Mercado Pago'}.`
     });
   };
 
@@ -1978,10 +2035,23 @@ const DebtsSection: React.FC<{
                       </p>
                     )}
 
-                    {debt.isPaid && debt.paidAt && (
-                      <p className="text-[10px] text-green-400 font-semibold">
-                        Pagado el: {new Date(debt.paidAt).toLocaleDateString()} a las {new Date(debt.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
+                    {debt.isPaid && (
+                      <div className="flex items-center gap-2 mt-1">
+                        {debt.paidAt && (
+                          <p className="text-[10px] text-green-400 font-semibold">
+                            Pagado el: {new Date(debt.paidAt).toLocaleDateString()} a las {new Date(debt.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        )}
+                        {debt.paymentMethod && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            debt.paymentMethod === 'efectivo'
+                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                          }`}>
+                            {debt.paymentMethod === 'efectivo' ? '💵 Efectivo' : '💳 Mercado Pago'}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
 
@@ -2001,7 +2071,7 @@ const DebtsSection: React.FC<{
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleMarkAsPaid(debt.id)}
+                          onClick={() => setPayingDebt(debt)}
                           className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold shadow transition-colors flex items-center gap-1"
                         >
                           <CheckCircle className="h-3 w-3" /> Cobrar
@@ -2021,6 +2091,48 @@ const DebtsSection: React.FC<{
               ))
             )}
           </div>
+
+          {/* Modal para elegir método de pago al cobrar una deuda */}
+          {payingDebt && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+              <div className="bg-gray-800 border border-gray-700 rounded-2xl max-w-sm w-full p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+                <div className="text-center mb-5">
+                  <div className="mx-auto w-12 h-12 bg-green-500/10 border border-green-500/20 rounded-full flex items-center justify-center text-green-400 mb-3">
+                    <DollarSign className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Seleccionar método de pago</h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Cobro de <span className="font-semibold text-white">{payingDebt.customerName}</span> por <span className="font-semibold text-green-400">${payingDebt.amount.toLocaleString()}</span>
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <button
+                    onClick={() => handleConfirmPayDebt('efectivo')}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 hover:border-emerald-400 rounded-xl transition-all group"
+                  >
+                    <span className="text-2xl group-hover:scale-110 transition-transform">💵</span>
+                    <span className="text-sm font-bold text-emerald-400">Efectivo</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleConfirmPayDebt('mp')}
+                    className="flex flex-col items-center justify-center gap-2 p-4 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/40 hover:border-sky-400 rounded-xl transition-all group"
+                  >
+                    <span className="text-2xl group-hover:scale-110 transition-transform">💳</span>
+                    <span className="text-sm font-bold text-sky-400">Mercado Pago</span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setPayingDebt(null)}
+                  className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-xs font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
